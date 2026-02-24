@@ -1,0 +1,15 @@
+# Google Maps API Key
+# Copie este arquivo para key.properties e preencha com suas credenciais
+# NÃO commite o arquivo key.properties no controle de versão!
+
+# Google Maps API Key
+GOOGLE_MAPS_API_KEY=YOUR_API_KEY_HERE
+
+# Keystore configuration (para release builds)
+# storePassword=your_store_password
+# keyPassword=your_key_password
+# keyAlias=your_key_alias
+# storeFile=../foolApp.jks
+
+
+

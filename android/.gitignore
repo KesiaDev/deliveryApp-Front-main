@@ -1,0 +1,5 @@
+# Key properties file with sensitive data
+key.properties
+
+# Local properties
+local.properties

@@ -1,0 +1,109 @@
+plugins {
+    id "com.android.application"
+    id "kotlin-android"
+    id "dev.flutter.flutter-gradle-plugin"
+}
+
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withReader('UTF-8') { reader ->
+        localProperties.load(reader)
+    }
+}
+
+// Load key properties for API keys and signing config
+def keyProperties = new Properties()
+def keyPropertiesFile = rootProject.file('key.properties')
+if (keyPropertiesFile.exists()) {
+    keyPropertiesFile.withReader('UTF-8') { reader ->
+        keyProperties.load(reader)
+    }
+}
+
+def flutterVersionCode = localProperties.getProperty('flutter.versionCode')
+if (flutterVersionCode == null) {
+    flutterVersionCode = '1.1'
+}
+
+def flutterVersionName = localProperties.getProperty('flutter.versionName')
+if (flutterVersionName == null) {
+    flutterVersionName = '1.1'
+}
+
+android {
+    compileSdk 36
+    namespace "com.fool.delivery_front"
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+    }
+
+    defaultConfig {
+        applicationId "com.fool.delivery_front"
+        minSdkVersion flutter.minSdkVersion
+        targetSdkVersion 36
+        versionCode 3
+        versionName flutterVersionName
+        // Enabling multidex support for apps with more than 65k methods
+        multiDexEnabled true
+        
+        // Google Maps API Key from key.properties
+        def mapsApiKey = keyProperties.getProperty('GOOGLE_MAPS_API_KEY')
+        if (mapsApiKey == null) {
+            // Fallback to hardcoded value if key.properties doesn't exist (NOT RECOMMENDED for production)
+            mapsApiKey = "AIzaSyBJ-GzLkdL3BUc9TJd1ZdrDdF_NV8Y9JN8"
+        }
+        manifestPlaceholders = [GOOGLE_MAPS_API_KEY: mapsApiKey]
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    signingConfigs {
+        release {
+            if (keyPropertiesFile.exists()) {
+                storeFile file(keyProperties.getProperty('storeFile') ?: '../foolApp.jks')
+                keyAlias keyProperties.getProperty('keyAlias') ?: 'key'
+                keyPassword keyProperties.getProperty('keyPassword') ?: ''
+                storePassword keyProperties.getProperty('storePassword') ?: ''
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            // Use release signing config if key.properties exists, otherwise use debug (NOT FOR PRODUCTION)
+            if (keyPropertiesFile.exists()) {
+                signingConfig signingConfigs.release
+            } else {
+                signingConfig signingConfigs.debug
+            }
+            minifyEnabled true
+            shrinkResources true
+            proguardFiles getDefaultProguardFile('proguard-android-optimize.txt'), 'proguard-rules.pro'
+        }
+    }
+
+    lintOptions {
+        checkReleaseBuilds true
+        abortOnError false
+        // Allow lint to continue even if errors are found
+    }
+}
+
+flutter {
+    source '../..'
+}
+
+dependencies {
+    implementation "com.google.android.gms:play-services-location:21.0.1"
+}
+
+apply plugin: 'com.google.gms.google-services'

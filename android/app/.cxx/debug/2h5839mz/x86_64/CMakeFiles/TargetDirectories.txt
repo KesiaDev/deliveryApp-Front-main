@@ -1,0 +1,2 @@
+C:/Users/User/Desktop/deliveryApp-Front-main/android/app/.cxx/debug/2h5839mz/x86_64/CMakeFiles/edit_cache.dir
+C:/Users/User/Desktop/deliveryApp-Front-main/android/app/.cxx/debug/2h5839mz/x86_64/CMakeFiles/rebuild_cache.dir

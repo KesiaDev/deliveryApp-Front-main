@@ -1,0 +1,30 @@
+
+import 'dart:convert';
+
+class ValoresTaxas {
+  ValoresTaxas({
+   this.kmIni;
+  this.kmFim;
+  this.vlrTaxa;
+  this.numSeq;
+  });
+
+  double? kmIni;
+  double? kmFim;
+  double? vlrTaxa;
+  int? numSeq;
+
+  factory ValoresTaxas.fromJson(Map<String, dynamic> json) => ValoresTaxas(
+        kmIni: json["kmIni"],
+        kmFim: json["kmFim"],
+        vlrTaxa: json["vlrTaxa"],
+        numSeq: json["numSeq"],
+      );
+
+  Map<String, dynamic> toJson() => {
+        "vlrTaxa": vlrTaxa ?? 0,
+        "kmIni": kmIni ?? 0,
+        "kmFim": kmFim ?? 0,
+        "numSeq": numSeq ?? 0,
+      };
+}

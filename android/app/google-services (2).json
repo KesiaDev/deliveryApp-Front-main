@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "924177446406",
+    "project_id": "foolapp-c7f40",
+    "storage_bucket": "foolapp-c7f40.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:924177446406:android:7327b1229468d180c87587",
+        "android_client_info": {
+          "package_name": "com.fool.delivery_front"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAxOELyjLgPQsioP_xK3aSC97eSLNr-a0s"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
