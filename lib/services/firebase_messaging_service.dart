@@ -1,5 +1,8 @@
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:flutter/foundation.dart';
+import 'package:delivery_front/shared/services/local_storage_service.dart';
+import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
+import 'package:dio/dio.dart';
 
 class FirebaseMessagingService {
   static final _messaging = FirebaseMessaging.instance;
@@ -21,17 +24,22 @@ class FirebaseMessagingService {
         return;
       }
 
-      // Obtém token
+      // Obtém token e persiste localmente
       _fcmToken = await _messaging.getToken();
+      if (_fcmToken != null && _fcmToken!.isNotEmpty) {
+        await LocalStorageService.setTokenFCM(_fcmToken!);
+      }
       debugPrint('🔥 ==========================================');
       debugPrint('🔥 TOKEN FCM: $_fcmToken');
       debugPrint('🔥 ==========================================');
       debugPrint('💡 Copie este token para testar notificações no Firebase Console');
 
-      // Escuta mudanças no token
-      _messaging.onTokenRefresh.listen((newToken) {
+      // Escuta mudanças no token — persiste e sincroniza com backend
+      _messaging.onTokenRefresh.listen((newToken) async {
         _fcmToken = newToken;
+        await LocalStorageService.setTokenFCM(newToken);
         debugPrint('🔄 Novo Token FCM: $newToken');
+        await _syncTokenToBackend(newToken);
       });
 
       // Handlers agora são gerenciados pelo AdvancedNotificationService
@@ -62,5 +70,25 @@ class FirebaseMessagingService {
   }
 
   static String? getFcmToken() => _fcmToken;
+
+  /// Sincroniza o token FCM com o backend quando o usuário já está logado.
+  /// Chamado automaticamente no onTokenRefresh.
+  static Future<void> _syncTokenToBackend(String token) async {
+    try {
+      final user = ApiBaseHelper.userSessao;
+      if (user == null || user.jwt == null || user.codUsuario == null) return;
+
+      final dio = Dio(ApiBaseHelper.options);
+      dio.options.headers['Authorization'] = 'Bearer ${user.jwt}';
+      await dio.patch(
+        '/private/user/${user.codUsuario}/fcm-token',
+        data: {'desTokenFcm': token},
+      );
+      debugPrint('✅ Token FCM sincronizado com backend: ${user.codUsuario}');
+    } catch (e) {
+      // Falha silenciosa — token será sincronizado no próximo login
+      debugPrint('⚠️ Falha ao sincronizar token FCM: $e');
+    }
+  }
 }
 

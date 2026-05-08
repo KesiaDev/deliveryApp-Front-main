@@ -51,11 +51,18 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
 
     if (empre != null) {
       // Filtra motoristas excluídos localmente
-      return empre.where((m) {
+      final filtered = empre.where((m) {
         final codUsuario = m.user?.codUsuario;
         final codMotorista = m.codMotorista;
-        return !_motoristasExcluidos.contains(codUsuario) && 
+        return !_motoristasExcluidos.contains(codUsuario) &&
                !_motoristasExcluidos.contains(codMotorista);
+      }).toList();
+
+      // Deduplica por codMotorista — evita exibir registros duplicados do banco
+      final seenIds = <int>{};
+      return filtered.where((m) {
+        if (m.codMotorista == null) return true;
+        return seenIds.add(m.codMotorista!);
       }).toList();
     } else {
       return <Motorista>[];
@@ -334,16 +341,17 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
                   );
                 }
                 if (novoItemSelecionado.indTipo == 3) {
-                  if (empre.user?.indBloqueado == 1) {
-                    _adminService.changeStatusUser(empre.user!.codUsuario, 0);
-                    empre.user!.indBloqueado = 0;
-                  } else if (empre.user?.indBloqueado == null ||
-                      empre.user?.indBloqueado == 0) {
-                    _adminService.changeStatusUser(empre.user!.codUsuario, 1);
-                    empre.user!.indBloqueado = 1;
-                  }
-
-                  setState(() {});
+                  () async {
+                    if (empre.user?.indBloqueado == 1) {
+                      await _adminService.changeStatusUser(empre.user!.codUsuario, 0);
+                      empre.user!.indBloqueado = 0;
+                    } else if (empre.user?.indBloqueado == null ||
+                        empre.user?.indBloqueado == 0) {
+                      await _adminService.changeStatusUser(empre.user!.codUsuario, 1);
+                      empre.user!.indBloqueado = 1;
+                    }
+                    if (mounted) setState(() {});
+                  }();
                 }
 
                 if (novoItemSelecionado.indTipo == 4) {
@@ -691,16 +699,16 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
               _buildActionButton(
                 icon: isBloqueado ? Icons.lock_open_rounded : Icons.lock_rounded,
                 label: isBloqueado ? 'Desbloquear' : 'Bloquear',
-                onTap: () {
+                onTap: () async {
                   if (motorista.user?.indBloqueado == 1) {
-                    _adminService.changeStatusUser(motorista.user!.codUsuario, 0);
+                    await _adminService.changeStatusUser(motorista.user!.codUsuario, 0);
                     motorista.user!.indBloqueado = 0;
                   } else if (motorista.user?.indBloqueado == null ||
                       motorista.user?.indBloqueado == 0) {
-                    _adminService.changeStatusUser(motorista.user!.codUsuario, 1);
+                    await _adminService.changeStatusUser(motorista.user!.codUsuario, 1);
                     motorista.user!.indBloqueado = 1;
                   }
-                  setState(() {});
+                  if (mounted) setState(() {});
                 },
               ),
               PopupMenuButton<String>(

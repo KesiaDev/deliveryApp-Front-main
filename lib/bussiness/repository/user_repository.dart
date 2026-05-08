@@ -31,17 +31,29 @@ class UserRepository {
     print('🟢 [LOGIN] Email length: ${login.email.length}');
     print('🟢 [LOGIN] Email tem espaços? ${login.email.contains(" ")}');
     print('🟢 [LOGIN] Senha length: ${login.senha.length}');
-    print('🟢 [LOGIN] Fazendo requisição POST para /public/login...');
     final jsonToSend = login.toJson();
-    print('🟢 [LOGIN] JSON sendo enviado: ${json.encode(jsonToSend)}');
-    print('🟢 [LOGIN] Username no JSON: "${jsonToSend["username"]}"');
-    print('🟢 [LOGIN] Password no JSON: ${jsonToSend["password"] != null ? "*** (${jsonToSend["password"].toString().length} chars)" : "null"}');
+    final baseUrl = _dio.options.baseUrl;
+    final fullUrl = baseUrl.endsWith('/') ? '${baseUrl}public/login' : '$baseUrl/public/login';
+    
+    print('🟢 [LOGIN] ========== REQUEST DEBUG ==========');
+    print('🟢 [LOGIN] URL FINAL: $fullUrl');
+    print('🟢 [LOGIN] Método: POST');
+    print('🟢 [LOGIN] Headers: Content-Type=application/json');
+    print('🟢 [LOGIN] Body (username): "${jsonToSend["username"]}"');
+    print('🟢 [LOGIN] Body (password): *** (${jsonToSend["password"]?.toString().length ?? 0} chars)');
+    print('🟢 [LOGIN] Body (desTokenFcm): ${jsonToSend["desTokenFcm"] != null ? "presente" : "null"}');
+    print('🟢 [LOGIN] Timeout: connect=30s, send=90s, receive=90s');
+    print('🟢 [LOGIN] ====================================');
     
     try {
-      print('🟢 [LOGIN] Aguardando resposta da API...');
+      // URL completa para garantir /v1 (Dio resolve path relativo e remove /v1 do baseUrl)
       final response = await _dio.post(
-        "/public/login",
+        fullUrl,
         data: json.encode(login.toJson()),
+        options: Options(
+          sendTimeout: const Duration(seconds: 90),
+          receiveTimeout: const Duration(seconds: 90),
+        ),
       );
       
       print('🟢 [LOGIN] ✅ Resposta recebida! Status: ${response.statusCode}');
@@ -192,6 +204,16 @@ class UserRepository {
       } else {
         // Temos JWT, login foi bem-sucedido
         print('✅ [LOGIN] Login bem-sucedido! JWT presente.');
+      }
+
+      // BUG-007 fix: bloqueia acesso se usuário está bloqueado, mesmo que JWT tenha sido emitido
+      final bloqueadoResp = usuario.usuarioResp?.indBloqueado ?? usuario.indBloqueado;
+      if (bloqueadoResp == 1) {
+        print('🔴 [LOGIN] Usuário bloqueado (indBloqueado=1). Acesso negado.');
+        throw ApiException(
+          message: 'Sua conta está bloqueada. Entre em contato com o suporte.',
+          statusCode: 403,
+        );
       }
 
       // Atualiza token no ApiBaseHelper
@@ -407,7 +429,8 @@ class UserRepository {
       int codUsuario) async {
     _dio.options.headers["Authorization"] =
         "Bearer ${ApiBaseHelper.userSessao!.jwt}";
-    final response = await _dio.get("/private/corridas/usuario/${codUsuario}");
+    // BUG-004 fix: endpoint correto para corridas disponíveis do motorista
+    final response = await _dio.get("/private/corridas/motorista/${codUsuario}/0");
 
     List<SolicitacaoMotorista> listResponse = [];
     ListaSolicitacoesMotorista retorno =
@@ -534,17 +557,33 @@ class UserRepository {
       }
     }
     try {
-      print('🟢 [CADASTRO] Fazendo requisição POST para /public/criarUsuario...');
       final jsonToSend = userInsert?.toJson();
-      print('🟢 [CADASTRO] JSON sendo enviado: ${json.encode(jsonToSend)}');
-      print('🟢 [CADASTRO] Email no JSON: ${jsonToSend?["usuario"]}');
-      print('🟢 [CADASTRO] Senha no JSON: ${jsonToSend?["senha"] != null ? "***" : "null"}');
-      print('🟢 [CADASTRO] usuarioResp.usuario: ${jsonToSend?["usuarioResp"]?["usuario"]}');
-      print('🟢 [CADASTRO] usuarioResp.senha: ${jsonToSend?["usuarioResp"]?["senha"] != null ? "***" : "null"}');
+      final baseUrl = _dio.options.baseUrl;
+      final fullUrl = baseUrl.endsWith('/') ? '${baseUrl}public/criarUsuario' : '$baseUrl/public/criarUsuario';
       
+      print('🟢 [CADASTRO] ========== REQUEST DEBUG ==========');
+      print('🟢 [CADASTRO] URL FINAL: $fullUrl');
+      print('🟢 [CADASTRO] Método: POST');
+      print('🟢 [CADASTRO] Headers: Content-Type=application/json');
+      print('🟢 [CADASTRO] Body (usuario): ${jsonToSend?["usuario"]}');
+      print('🟢 [CADASTRO] Body (desNome): ${jsonToSend?["desNome"]}');
+      print('🟢 [CADASTRO] Body (senha): ${jsonToSend?["senha"] != null ? "***" : "null"}');
+      print('🟢 [CADASTRO] Timeout: connect=30s, send=30s, receive=30s');
+      print('🟢 [CADASTRO] ====================================');
+      
+      // Idempotency key baseado no email para evitar registros duplicados em retries
+      final email = userInsert?.usuario ?? '';
+      final idempotencyKey = 'reg-${email.hashCode.abs()}-${email.length}';
+
+      // URL completa para garantir /v1 (Dio resolve path relativo e remove /v1 do baseUrl)
       final response = await _dio.post(
-        "/public/criarUsuario",
+        fullUrl,
         data: json.encode(jsonToSend),
+        options: Options(
+          sendTimeout: const Duration(seconds: 30),
+          receiveTimeout: const Duration(seconds: 30),
+          headers: {'X-Idempotency-Key': idempotencyKey},
+        ),
       );
       
       print('🟢 [CADASTRO] Resposta recebida! Status: ${response.statusCode}');
@@ -579,7 +618,9 @@ class UserRepository {
       print('🟢 [CADASTRO] codUsuario: ${retorno.codUsuario}');
       print('🟢 [CADASTRO] desNome: ${retorno.desNome}');
       
-      if (retorno.indSucesso == 0) {
+      // BUG-001 fix: backend pode omitir indSucesso; se temos codUsuario, é sucesso
+      final bool isSuccess = retorno.codUsuario != null || (retorno.indSucesso != null && retorno.indSucesso != 0);
+      if (!isSuccess) {
         String message = retorno.desMsgErro ?? 'Erro ao efetuar cadastro';
         print('🔴 [CADASTRO] Cadastro falhou: $message');
         print('🔴 [CADASTRO] Mensagem de erro da API: ${retorno.desMsgErro ?? "Não informada"}');
@@ -856,15 +897,45 @@ class UserRepository {
       }
 
       if (codMotorista != null) {
-        final response = await _dio.get(
-            "/private/corridas/corrida/motorista/totais/${codMotorista}",
-            queryParameters: queryParameters);
+        // Endpoint /corridas/corrida/motorista/totais/{id} retorna 404 (BUG-005)
+        // Fallback: busca todas as corridas e conta por status localmente
+        try {
+          final response = await _dio.get(
+              "/private/corridas/corrida/motorista/totais/${codMotorista}",
+              queryParameters: queryParameters);
+          List<DadosCorridas> listResponse = [];
+          if (response.data != null) {
+            listResponse = dadosCorridasFromJson(json.encode(response.data));
+          }
+          if (listResponse.isNotEmpty) return listResponse;
+        } catch (_) {}
 
-        List<DadosCorridas> listResponse = [];
-
-        listResponse = dadosCorridasFromJson(response.data);
-
-        if (listResponse != null) return listResponse;
+        // Fallback: busca todas as corridas do motorista e agrupa por status
+        try {
+          final allResponse = await _dio.get(
+              "/private/corridas/motorista/${codMotorista}/-1",
+              queryParameters: queryParameters);
+          List<SolicitacaoMotorista> allCorridas = [];
+          ListaSolicitacoesMotorista retorno =
+              ListaSolicitacoesMotorista.fromJson(allResponse.data);
+          if (retorno.listaSolicitacoes != null) {
+            allCorridas = retorno.listaSolicitacoes!;
+          }
+          Map<int, int> counts = {};
+          for (var c in allCorridas) {
+            if (c.indStatusCorrida != null) {
+              counts[c.indStatusCorrida!] =
+                  (counts[c.indStatusCorrida!] ?? 0) + 1;
+            }
+          }
+          List<DadosCorridas> result = counts.entries
+              .map((e) => DadosCorridas(
+                    indStatusCorrida: e.key,
+                    qtdCorridas: e.value,
+                  ))
+              .toList();
+          return result;
+        } catch (_) {}
       }
     } else {
       // Admin: busca todos os dados com parâmetros de data
@@ -1077,8 +1148,10 @@ class UserRepository {
   /// Solicita recuperação de senha via email
   Future<void> solicitarRecuperacaoSenha(RecuperacaoSenhaRequest request) async {
     try {
+      final baseUrl = _dio.options.baseUrl;
+      final fullUrl = baseUrl.endsWith('/') ? '${baseUrl}public/recuperar-senha' : '$baseUrl/public/recuperar-senha';
       final response = await _dio.post(
-        "/public/recuperar-senha",
+        fullUrl,
         data: json.encode(request.toJson()),
       );
       
