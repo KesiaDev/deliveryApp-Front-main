@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:developer';
 
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
@@ -5,6 +6,7 @@ import 'package:delivery_front/core/routes/app_routes.dart';
 import 'package:delivery_front/home/widgets/maps/mapsSheet.dart';
 import 'package:delivery_front/login/login_controller.dart';
 import 'package:delivery_front/motorista/corridas/lista_solicitacoes_motorista_controller.dart';
+import 'package:delivery_front/modules/chat/screens/chat_screen.dart';
 import 'package:delivery_front/modules/rating/services/rating_automatic_service.dart';
 import 'package:delivery_front/shared/components/Utils.dart';
 import 'package:delivery_front/shared/models/TipoCorrida.dart';
@@ -37,14 +39,20 @@ class ListaSolicitacoesMotoristaPage extends StatefulWidget {
 class _ListaSolicitacoesMotoristaPageState
     extends State<ListaSolicitacoesMotoristaPage> {
   ListaSolicitacoesMotoristaController? _controller;
+  late VoidCallback _controllerListener;
 
   @override
   void initState() {
     super.initState();
     _controller = ListaSolicitacoesMotoristaController(context);
-    _controller!.addListener(() {
-      setState(() {});
-    });
+    _controllerListener = () { if (mounted) setState(() {}); };
+    _controller!.addListener(_controllerListener);
+  }
+
+  @override
+  void dispose() {
+    _controller?.removeListener(_controllerListener);
+    super.dispose();
   }
 
   @override
@@ -58,11 +66,17 @@ class _ListaSolicitacoesMotoristaPageState
         appBar: AppBar(
           title: Text(ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ==
                   widget.indTipoDefault
-              ? 'Novas corridas'
+              ? 'Pedidos disponíveis'
               : ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO ==
                       widget.indTipoDefault
-                  ? 'Minhas corridas - já iniciadas'
-                  : 'Minhas corridas'),
+                  ? 'Corridas em andamento'
+                  : ApiBaseHelper.IND_STATUS_CORRIDA_3_CONCLUIDA ==
+                          widget.indTipoDefault
+                      ? 'Corridas concluídas'
+                      : ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA ==
+                              widget.indTipoDefault
+                          ? 'Corridas canceladas'
+                          : 'Minhas corridas'),
         ),
         body: Center(
             child: ListaCemMotoristaView(
@@ -75,7 +89,7 @@ class _ListaSolicitacoesMotoristaPageState
   }
 }
 
-class ListaCemMotoristaView extends StatelessWidget {
+class ListaCemMotoristaView extends StatefulWidget {
   final ListaSolicitacoesMotoristaController controller;
   final int? indStatusDefault;
   final bool isAdm;
@@ -88,26 +102,79 @@ class ListaCemMotoristaView extends StatelessWidget {
       : super(key: key);
 
   @override
-  Widget build(BuildContext context) {
-    return FutureBuilder<List<SolicitacaoMotorista>>(
-      future: controller.buscaListaSolicitacoes(
-          indBuscaChamadosRaio: indStatusDefault ?? -1, isAdm: isAdm),
-      builder: (context, snapshot) {
-        if (snapshot.connectionState != ConnectionState.done) {
-          return CircularProgressIndicator();
-        }
+  State<ListaCemMotoristaView> createState() => _ListaCemMotoristaViewState();
+}
 
-        if (snapshot.hasData) {
-          List<SolicitacaoMotorista> data = snapshot.data!;
-          final route = ModalRoute.of(context);
-          final pageName = route?.settings.name ?? "";
-          log(pageName);
-          return _jobsListView(data, controller);
-        } else if (snapshot.hasError) {
-          return Text("${snapshot.error}");
-        }
-        return CircularProgressIndicator();
-      },
+class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
+  late Future<List<SolicitacaoMotorista>> _future;
+  Timer? _autoRefreshTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    // Auto-refresh a cada 15 segundos (BUG-006: UI não atualiza status em tempo real)
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) _loadData();
+    });
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _loadData() {
+    setState(() {
+      _future = widget.controller.buscaListaSolicitacoes(
+          indBuscaChamadosRaio: widget.indStatusDefault ?? -1,
+          isAdm: widget.isAdm);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return RefreshIndicator(
+      onRefresh: () async => _loadData(),
+      child: FutureBuilder<List<SolicitacaoMotorista>>(
+        future: _future,
+        builder: (context, snapshot) {
+          if (snapshot.connectionState != ConnectionState.done) {
+            return Center(child: CircularProgressIndicator());
+          }
+
+          if (snapshot.hasData) {
+            List<SolicitacaoMotorista> data = snapshot.data!;
+            final route = ModalRoute.of(context);
+            final pageName = route?.settings.name ?? "";
+            log(pageName);
+            if (data.isEmpty) {
+              return ListView(
+                children: const [
+                  SizedBox(height: 80),
+                  Center(
+                    child: Text(
+                      'Nenhuma corrida encontrada.\nArraste para baixo para atualizar.',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(color: Colors.grey, fontSize: 14),
+                    ),
+                  ),
+                ],
+              );
+            }
+            return _jobsListView(data, widget.controller);
+          } else if (snapshot.hasError) {
+            return ListView(
+              children: [
+                SizedBox(height: 80),
+                Center(child: Text("${snapshot.error}")),
+              ],
+            );
+          }
+          return Center(child: CircularProgressIndicator());
+        },
+      ),
     );
   }
 
@@ -136,7 +203,9 @@ class ListaCemMotoristaView extends StatelessWidget {
   //       });
   // }
 
-  ListView _jobsListView(List<SolicitacaoMotorista> data, controller) {
+  ListView _jobsListView(
+      List<SolicitacaoMotorista> data,
+      ListaSolicitacoesMotoristaController controller) {
     return ListView.builder(
         itemCount: data.length,
         itemBuilder: (context, index) {
@@ -194,9 +263,13 @@ class ListaCemMotoristaView extends StatelessWidget {
             " - Fim corrida:" +
             ApiBaseHelper.getDtaFormatada(amigo.dthFinalizacaoCorrida);
 
-      if (amigo.desEnderecoEntrega != null)
-        subtitleEndere = subtitleEndere + amigo.desEnderecoEntrega! + " - ";
-      //+            amigo.desNumeroEndereco!;
+      if (amigo.desEnderecoEntrega != null) {
+        subtitleEndere = subtitleEndere + amigo.desEnderecoEntrega!;
+        if (amigo.desNumeroEndereco != null && amigo.desNumeroEndereco!.isNotEmpty) {
+          subtitleEndere = subtitleEndere + ', ' + amigo.desNumeroEndereco!;
+        }
+        subtitleEndere = subtitleEndere + ' - ';
+      }
 
       if (amigo.desObsCorrida != null)
         subtitleObsEntrega = subtitleObsEntrega + amigo.desObsCorrida!;
@@ -208,8 +281,73 @@ class ListaCemMotoristaView extends StatelessWidget {
           getTitleTipoCorrida(amigo.indTipoCorrida!);
     }
 
-    subtitleObsEntrega =
-        subtitleObsEntrega + ' - R\$ ${amigo.vlrTotalMotorista ?? 0}';
+    // Para nova corrida: exibe ganho com label claro no topo das obs
+    if (amigo.indStatusCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA) {
+      final ganho = Utils.formatBRL(amigo.vlrTotalMotorista);
+      subtitleObsEntrega = '💰 Você recebe: $ganho\n$subtitleObsEntrega';
+    } else {
+      subtitleObsEntrega = subtitleObsEntrega + ' · ${Utils.formatBRL(amigo.vlrTotalMotorista)}';
+    }
+
+    // Build multi-destination steps label when delivery has ordered destinations
+    if (amigo.destinos != null && amigo.destinos!.length > 1) {
+      final sorted = [...amigo.destinos!]..sort((a, b) => a.ordem.compareTo(b.ordem));
+      final steps = sorted
+          .map((d) => '${d.ordem}. ${d.enderecoCompleto}')
+          .join('\n');
+      subtitleEndere = 'Paradas:\n$steps';
+    }
+
+    // Botão de chat — visível para corridas aceitas ou em andamento
+    final user = ApiBaseHelper.userSessao;
+    Widget chatButton = Visibility(
+      visible: (amigo.indStatusCorrida ==
+                  ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA ||
+              amigo.indStatusCorrida ==
+                  ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO)
+          ? true
+          : false,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          FloatingActionButton(
+            heroTag: 'chat_${amigo.numSeq}',
+            onPressed: () {
+              if (user == null) return;
+              final motoristaId =
+                  user.usuarioResp?.motoristas?.first.codMotorista?.toString() ??
+                      '';
+              final motoristaName =
+                  user.usuarioResp?.motoristas?.first.desNomeFantasia ??
+                      user.desNome ??
+                      'Motorista';
+              final empresaId =
+                  amigo.codEmpresa?.toString() ?? '';
+              final empresaName =
+                  amigo.dbEmpresasByCodEmpresa?.desNomeFantasia ?? 'Empresa';
+
+              Navigator.push(
+                _context,
+                MaterialPageRoute(
+                  builder: (_) => ChatScreen(
+                    corridaId: amigo.numSeq?.toString() ?? '',
+                    motoristaId: motoristaId,
+                    motoristaName: motoristaName,
+                    empresaId: empresaId,
+                    empresaName: empresaName,
+                    currentUserId: motoristaId,
+                    currentUserName: motoristaName,
+                    currentUserType: 'motorista',
+                  ),
+                ),
+              );
+            },
+            child: const Icon(Icons.chat_bubble_outline),
+            backgroundColor: Colors.green,
+          ),
+        ],
+      ),
+    );
 
     return _customListItem(
       IconButton(
@@ -432,6 +570,7 @@ class ListaCemMotoristaView extends StatelessWidget {
           ],
         ),
       ),
+      chatButton,
     );
   }
 
@@ -445,7 +584,8 @@ class ListaCemMotoristaView extends StatelessWidget {
       String enderecoEntrega,
       String obsEntrega,
       Widget custom2,
-      Widget custom3) {
+      Widget custom3,
+      Widget custom4) {
     return Padding(
       padding: const EdgeInsets.all(15.0),
       child: Row(
@@ -463,6 +603,7 @@ class ListaCemMotoristaView extends StatelessWidget {
           custom,
           custom2,
           custom3,
+          custom4,
         ],
       ),
     );
@@ -616,6 +757,12 @@ class ListaCemMotoristaView extends StatelessWidget {
               nextStatus,
               motivoCancelamento: motivo,
             );
+          } else {
+            // Usuário fechou o diálogo sem confirmar — informa que não foi cancelado
+            LoginControler.showToast(
+              _context,
+              'Cancelamento não realizado. Informe o motivo para cancelar.',
+            );
           }
           return;
         }
@@ -660,10 +807,84 @@ class ListaCemMotoristaView extends StatelessWidget {
       },
     );
 
+    // Para nova corrida: exibe ganho em destaque antes do aceite
+    Widget dialogContent;
+    if (indStatusAtualCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA) {
+      final ganho = solicitacao.vlrTotalMotorista;
+      final ganhoText = ganho != null && ganho > 0
+          ? Utils.formatBRL(ganho)
+          : 'Valor a calcular';
+      final enderecoRetirada = solicitacao.enderecoEmpresa ?? 'Endereço não informado';
+      final enderecoEntrega = solicitacao.desEnderecoEntrega != null
+          ? '${solicitacao.desEnderecoEntrega}${solicitacao.desNumeroEndereco != null ? ', ${solicitacao.desNumeroEndereco}' : ''}'
+          : 'Destino não informado';
+      final distancia = solicitacao.qtdKmCorrida != null
+          ? '${solicitacao.qtdKmCorrida!.toStringAsFixed(1)} km'
+          : null;
+
+      dialogContent = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Ganho em destaque
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: Colors.green.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Colors.green.shade300),
+            ),
+            child: Column(
+              children: [
+                Text('Você receberá', style: TextStyle(fontSize: 13, color: Colors.green.shade700)),
+                const SizedBox(height: 4),
+                Text(
+                  ganhoText,
+                  style: TextStyle(
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                    color: Colors.green.shade800,
+                  ),
+                ),
+                if (distancia != null)
+                  Text(distancia, style: TextStyle(fontSize: 12, color: Colors.green.shade600)),
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+          // Rota
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.radio_button_checked, size: 16, color: Colors.orange),
+              const SizedBox(width: 8),
+              Expanded(child: Text(enderecoRetirada, style: const TextStyle(fontSize: 13))),
+            ],
+          ),
+          const SizedBox(height: 6),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(Icons.location_on, size: 16, color: Colors.red),
+              const SizedBox(width: 8),
+              Expanded(child: Text(enderecoEntrega, style: const TextStyle(fontSize: 13))),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text('Deseja aceitar esta corrida?', style: TextStyle(fontSize: 13, color: Colors.grey.shade700)),
+        ],
+      );
+    } else {
+      dialogContent = Text("Deseja realmente ${text}?");
+    }
+
     // set up the AlertDialog
     AlertDialog alert = AlertDialog(
-      title: Text("Confirmar"),
-      content: Text("Deseja realmente ${text}?"),
+      title: indStatusAtualCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA
+          ? const Text("Aceitar corrida?")
+          : Text("Confirmar"),
+      content: dialogContent,
       actions: [
         cancelButton,
         continueButton,
