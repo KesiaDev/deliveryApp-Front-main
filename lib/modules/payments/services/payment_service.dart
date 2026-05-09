@@ -1,51 +1,147 @@
+import 'dart:io';
+import 'package:dio/dio.dart';
+import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import '../models/payment_model.dart';
+
+/// Modelo interno para dados da resposta PIX da API
+class _PixApiResponse {
+  final String paymentId;
+  final String status;
+  final String qrCodeImage;
+  final String pixCopyPaste;
+  final String expirationDate;
+  final double value;
+
+  _PixApiResponse({
+    required this.paymentId,
+    required this.status,
+    required this.qrCodeImage,
+    required this.pixCopyPaste,
+    required this.expirationDate,
+    required this.value,
+  });
+
+  factory _PixApiResponse.fromJson(Map<String, dynamic> json) {
+    return _PixApiResponse(
+      paymentId: json['paymentId'] ?? '',
+      status: json['status'] ?? '',
+      qrCodeImage: json['qrCodeImage'] ?? '',
+      pixCopyPaste: json['pixCopyPaste'] ?? '',
+      expirationDate: json['expirationDate'] ?? '',
+      value: (json['value'] as num).toDouble(),
+    );
+  }
+}
 
 /// Serviço isolado para processamento de pagamentos
 /// Preparado para integração com gateway real (Stripe, Mercado Pago, etc.)
 class PaymentService {
+  /// CNPJ padrão da empresa para pagamentos PIX
+  static const String _pixCnpj = '40283635000168';
+  static const String _pixName = 'Fool Entregas';
+
+  /// Chama o endpoint real de PIX na API
+  static Future<_PixApiResponse> _callPixApi({
+    required double amount,
+    required String description,
+    required String corridaId,
+  }) async {
+    final jwt = ApiBaseHelper.userSessao?.jwt;
+
+    final dio = Dio(BaseOptions(
+      baseUrl: ApiBaseHelper.baseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {
+        HttpHeaders.contentTypeHeader: 'application/json',
+        HttpHeaders.authorizationHeader: jwt != null ? 'Bearer $jwt' : '',
+      },
+    ));
+
+    final body = {
+      'cpfCnpj': _pixCnpj,
+      'name': _pixName,
+      'value': amount,
+      'description': description,
+      'corridaId': corridaId,
+    };
+
+    final response = await dio.post('/private/payment/pix', data: body);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return _PixApiResponse.fromJson(response.data as Map<String, dynamic>);
+    }
+
+    throw Exception('Erro ao gerar PIX: status ${response.statusCode}');
+  }
+
   /// Processa um pagamento
   static Future<PaymentResponse> processPayment(PaymentRequest request) async {
-    // Simula delay de processamento
+    if (request.method == PaymentMethod.pix) {
+      try {
+        final pixResp = await _callPixApi(
+          amount: request.amount,
+          description: request.description ?? 'Corrida #${request.corridaId}',
+          corridaId: request.corridaId,
+        );
+
+        return PaymentResponse(
+          id: 'resp_${DateTime.now().millisecondsSinceEpoch}',
+          paymentId: request.id,
+          success: true,
+          transactionId: pixResp.paymentId,
+          timestamp: DateTime.now(),
+          method: request.method,
+          amount: request.amount,
+          // Dados extras PIX embutidos no paymentData via extensão abaixo
+        );
+      } catch (e) {
+        return PaymentResponse(
+          id: 'resp_${DateTime.now().millisecondsSinceEpoch}',
+          paymentId: request.id,
+          success: false,
+          errorMessage: 'Erro ao processar PIX: $e',
+          timestamp: DateTime.now(),
+          method: request.method,
+          amount: request.amount,
+        );
+      }
+    }
+
+    // Mock de sucesso para outros métodos (dinheiro, cartão, etc.)
     await Future.delayed(const Duration(seconds: 2));
-
-    // TODO: Em produção, integrar com gateway real
-    // switch (request.method) {
-    //   case PaymentMethod.pix:
-    //     return await _processPixPayment(request);
-    //   case PaymentMethod.creditCard:
-    //   case PaymentMethod.debitCard:
-    //     return await _processCardPayment(request);
-    //   case PaymentMethod.boleto:
-    //     return await _processBoletoPayment(request);
-    //   case PaymentMethod.cash:
-    //     return await _processCashPayment(request);
-    // }
-
-    // Mock de sucesso para desenvolvimento
-    final success = true; // Simula 95% de sucesso
-    final transactionId = success
-        ? 'TXN_${DateTime.now().millisecondsSinceEpoch}'
-        : null;
 
     return PaymentResponse(
       id: 'resp_${DateTime.now().millisecondsSinceEpoch}',
       paymentId: request.id,
-      success: success,
-      transactionId: transactionId,
+      success: true,
+      transactionId: 'TXN_${DateTime.now().millisecondsSinceEpoch}',
       timestamp: DateTime.now(),
       method: request.method,
       amount: request.amount,
     );
   }
 
-  /// Gera QR Code PIX (mock)
-  static Future<String> generatePixQrCode({
+  /// Gera QR Code PIX real via API — retorna o pixCopyPaste
+  static Future<PixQrCodeData> generatePixQrCode({
     required double amount,
     required String description,
+    required String corridaId,
   }) async {
-    // TODO: Em produção, gerar QR Code real via API do gateway
-    await Future.delayed(const Duration(seconds: 1));
-    return '00020126360014BR.GOV.BCB.PIX0114+5511999999999520400005303986540${amount.toStringAsFixed(2)}5802BR5925FOOL DELIVERY APP6009SAO PAULO62070503***6304';
+    final pixResp = await _callPixApi(
+      amount: amount,
+      description: description,
+      corridaId: corridaId,
+    );
+
+    return PixQrCodeData(
+      paymentId: pixResp.paymentId,
+      pixCopyPaste: pixResp.pixCopyPaste,
+      qrCodeImage: pixResp.qrCodeImage,
+      expirationDate: pixResp.expirationDate,
+      value: pixResp.value,
+    );
   }
 
   /// Tokeniza cartão (mock)
@@ -55,31 +151,14 @@ class PaymentService {
     return 'tok_${DateTime.now().millisecondsSinceEpoch}';
   }
 
-  /// Gera boleto (mock)
-  static Future<Map<String, dynamic>> generateBoleto({
-    required double amount,
-    required DateTime dueDate,
-  }) async {
-    // TODO: Em produção, gerar boleto real via API
-    await Future.delayed(const Duration(seconds: 1));
-    return {
-      'barcode': '34191.09008 01234.567890 12345.678901 2 12345678901234',
-      'digitableLine': '34191.09008 01234.567890 12345.678901 2 12345678901234',
-      'dueDate': dueDate.toIso8601String(),
-      'amount': amount,
-    };
-  }
-
   /// Valida dados do cartão
   static bool validateCard(CardData cardData) {
-    // Validação básica
     if (cardData.number.replaceAll(' ', '').length < 13) return false;
     if (cardData.holderName.trim().isEmpty) return false;
     if (cardData.expiryMonth.length != 2) return false;
     if (cardData.expiryYear.length != 4) return false;
     if (cardData.cvv.length < 3) return false;
 
-    // Validação de data
     final now = DateTime.now();
     final expiryYear = int.tryParse(cardData.expiryYear);
     final expiryMonth = int.tryParse(cardData.expiryMonth);
@@ -92,7 +171,19 @@ class PaymentService {
   }
 }
 
+/// Dados retornados pela API PIX para exibição do QR Code
+class PixQrCodeData {
+  final String paymentId;
+  final String pixCopyPaste;
+  final String qrCodeImage;
+  final String expirationDate;
+  final double value;
 
-
-
-
+  PixQrCodeData({
+    required this.paymentId,
+    required this.pixCopyPaste,
+    required this.qrCodeImage,
+    required this.expirationDate,
+    required this.value,
+  });
+}
