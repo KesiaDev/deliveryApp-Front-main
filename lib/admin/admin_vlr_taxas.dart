@@ -55,6 +55,15 @@ class _AdminVlrTaxasPage extends State<AdminVlrTaxasPage>
           title: 'Taxas',
           scaffoldKey: scaffoldKey,
         ),
+        floatingActionButton: FloatingActionButton.extended(
+          onPressed: () => _showAddTaxaDialog(context),
+          backgroundColor: AdminColors.primaryRed,
+          icon: const Icon(Icons.add_rounded, color: Colors.white),
+          label: Text(
+            'Nova Taxa',
+            style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600),
+          ),
+        ),
         body: FutureBuilder<List<ValoresTaxas>>(
           future: generateList(),
           builder: (context, snapShot) {
@@ -164,14 +173,22 @@ class _AdminVlrTaxasPage extends State<AdminVlrTaxasPage>
                               ),
                             ),
                             DataCell(
-                              IconButton(
-                                icon: Icon(
-                                  Icons.edit_rounded,
-                                  color: AdminColors.primaryRed,
-                                ),
-                                onPressed: () async {
-                                  showAlertDialog(context, e);
-                                },
+                              Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: Icon(Icons.edit_rounded, color: AdminColors.primaryRed),
+                                    tooltip: 'Editar',
+                                    onPressed: () async {
+                                      showAlertDialog(context, e);
+                                    },
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete_rounded, color: Colors.red),
+                                    tooltip: 'Excluir',
+                                    onPressed: () => _excluirTaxa(context, e),
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -190,6 +207,115 @@ class _AdminVlrTaxasPage extends State<AdminVlrTaxasPage>
             }
           },
         ),
+      ),
+    );
+  }
+
+  Future<void> _excluirTaxa(BuildContext context, ValoresTaxas taxa) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AdminColors.cardWhite,
+        title: Text('Excluir Taxa', style: GoogleFonts.poppins(fontWeight: FontWeight.w600)),
+        content: Text(
+          'Deseja excluir a faixa ${taxa.kmIni?.toStringAsFixed(0)} – ${taxa.kmFim?.toStringAsFixed(0)} km?',
+          style: GoogleFonts.poppins(),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(false),
+            child: Text('Cancelar', style: GoogleFonts.poppins()),
+          ),
+          ElevatedButton(
+            onPressed: () => Navigator.of(ctx).pop(true),
+            style: ElevatedButton.styleFrom(backgroundColor: Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: Text('Excluir', style: GoogleFonts.poppins(color: Colors.white)),
+          ),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+    try {
+      await _adminService.excluirTaxa(taxa.numSeq!);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: const Text('Taxa excluída com sucesso'),
+        backgroundColor: AdminColors.successGreen,
+      ));
+      setState(() {});
+    } catch (e) {
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text('Erro ao excluir: $e'),
+        backgroundColor: Colors.red,
+      ));
+    }
+  }
+
+  void _showAddTaxaDialog(BuildContext context) {
+    final kmIniCtrl = TextEditingController();
+    final kmFimCtrl = TextEditingController();
+    final vlrCtrl = TextEditingController();
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        backgroundColor: AdminColors.cardWhite,
+        title: Text('Nova Taxa', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w600, color: AdminColors.textPrimary)),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            _taxaField(kmIniCtrl, 'Km Inicial'),
+            const SizedBox(height: 12),
+            _taxaField(kmFimCtrl, 'Km Final'),
+            const SizedBox(height: 12),
+            _taxaField(vlrCtrl, 'Valor da taxa (R\$)'),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: Text('Cancelar', style: GoogleFonts.poppins(color: AdminColors.textSecondary)),
+          ),
+          ElevatedButton(
+            onPressed: () async {
+              final kmIni = double.tryParse(kmIniCtrl.text.replaceAll(',', '.'));
+              final kmFim = double.tryParse(kmFimCtrl.text.replaceAll(',', '.'));
+              final vlr = double.tryParse(vlrCtrl.text.replaceAll(',', '.'));
+              if (kmIni == null || kmFim == null || vlr == null) {
+                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Preencha todos os campos')));
+                return;
+              }
+              Navigator.of(ctx).pop();
+              try {
+                final nova = ValoresTaxas(kmIni: kmIni, kmFim: kmFim, vlrTaxa: vlr, numSeq: 0);
+                await _adminService.saveTaxa(nova);
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                  content: const Text('Taxa criada com sucesso'),
+                  backgroundColor: AdminColors.successGreen,
+                ));
+                setState(() {});
+              } catch (e) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Erro: $e'), backgroundColor: Colors.red));
+              }
+            },
+            style: ElevatedButton.styleFrom(backgroundColor: AdminColors.primaryRed, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+            child: Text('Criar', style: GoogleFonts.poppins(color: Colors.white, fontWeight: FontWeight.w600)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _taxaField(TextEditingController ctrl, String hint) {
+    return TextFormField(
+      controller: ctrl,
+      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+      style: GoogleFonts.poppins(fontSize: 16, color: AdminColors.textPrimary),
+      decoration: InputDecoration(
+        hintText: hint,
+        hintStyle: GoogleFonts.poppins(color: AdminColors.textSecondary),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AdminColors.borderColor)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AdminColors.primaryRed, width: 2)),
       ),
     );
   }

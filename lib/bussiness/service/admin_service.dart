@@ -48,6 +48,14 @@ class AdminService {
   Future<void> saveTaxa(ValoresTaxas item) async {
     await _adminRepository.saveTaxa(item);
   }
+
+  Future<void> excluirTaxa(int numSeq) async {
+    await _adminRepository.excluirTaxa(numSeq);
+  }
+
+  Future<void> editarUsuario(int codUsuario, String desNome) async {
+    await _adminRepository.editarUsuario(codUsuario, desNome);
+  }
 }
 
 class ValoresTaxas {

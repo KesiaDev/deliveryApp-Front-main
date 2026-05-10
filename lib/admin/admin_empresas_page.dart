@@ -110,16 +110,17 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
                   );
                 }
                 if (novoItemSelecionado.indTipo == 3) {
-                  if (empre.user?.indBloqueado == 1) {
-                    _adminService.changeStatusUser(empre.user!.codUsuario, 0);
-                    empre.user!.indBloqueado = 0;
-                  } else if (empre.user?.indBloqueado == null ||
-                      empre.user?.indBloqueado == 0) {
-                    _adminService.changeStatusUser(empre.user!.codUsuario, 1);
-                    empre.user!.indBloqueado = 1;
-                  }
-
-                  setState(() {});
+                  () async {
+                    if (empre.user?.indBloqueado == 1) {
+                      await _adminService.changeStatusUser(empre.user!.codUsuario, 0);
+                      empre.user!.indBloqueado = 0;
+                    } else if (empre.user?.indBloqueado == null ||
+                        empre.user?.indBloqueado == 0) {
+                      await _adminService.changeStatusUser(empre.user!.codUsuario, 1);
+                      empre.user!.indBloqueado = 1;
+                    }
+                    if (mounted) setState(() {});
+                  }();
                 }
 
                 if (novoItemSelecionado.indTipo == 4) {
@@ -287,6 +288,129 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
     }
   }
 
+  Future<void> _editarEmpresa(Empresa empresa) async {
+    final nomeCtrl = TextEditingController(text: empresa.desNomeFantasia ?? '');
+    final razaoCtrl = TextEditingController(text: empresa.desRazaoSocial ?? '');
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: AdminColors.cardWhite,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Editar Empresa', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AdminColors.textPrimary)),
+            const SizedBox(height: 20),
+            _editField(nomeCtrl, 'Nome Fantasia'),
+            const SizedBox(height: 12),
+            _editField(razaoCtrl, 'Razão Social'),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final codUsuario = empresa.user?.codUsuario;
+                  if (codUsuario == null) {
+                    showToast(ctx, 'Usuário não identificado');
+                    return;
+                  }
+                  final novoNome = nomeCtrl.text.trim().isNotEmpty ? nomeCtrl.text.trim() : razaoCtrl.text.trim();
+                  if (novoNome.isEmpty) {
+                    showToast(ctx, 'Informe pelo menos um nome');
+                    return;
+                  }
+                  try {
+                    await _adminService.editarUsuario(codUsuario, novoNome);
+                    empresa.desNomeFantasia = nomeCtrl.text.trim().isNotEmpty ? nomeCtrl.text.trim() : empresa.desNomeFantasia;
+                    empresa.desRazaoSocial = razaoCtrl.text.trim().isNotEmpty ? razaoCtrl.text.trim() : empresa.desRazaoSocial;
+                    Navigator.of(ctx).pop();
+                    showToast(context, 'Empresa atualizada com sucesso!');
+                    setState(() {});
+                  } catch (e) {
+                    showToast(ctx, 'Erro ao editar: $e');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.primaryRed,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('Salvar', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _editField(TextEditingController ctrl, String label) {
+    return TextFormField(
+      controller: ctrl,
+      style: GoogleFonts.poppins(fontSize: 15, color: AdminColors.textPrimary),
+      decoration: InputDecoration(
+        labelText: label,
+        labelStyle: GoogleFonts.poppins(color: AdminColors.textSecondary),
+        border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AdminColors.borderColor)),
+        focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AdminColors.primaryRed, width: 2)),
+      ),
+    );
+  }
+
+  Future<void> _desbloquearTodasEmpresas() async {
+    final confirmacao = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Ação'),
+        content: const Text('Você está prestes a DESBLOQUEAR todas as empresas cadastradas.\n\nDeseja continuar?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.green),
+            child: const Text('DESBLOQUEAR TODAS'),
+          ),
+        ],
+      ),
+    );
+    if (confirmacao != true) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final empresas = await _userService?.buscaEmpresas() ?? [];
+      int sucesso = 0, erros = 0;
+      for (var empresa in empresas) {
+        if (empresa.user?.codUsuario != null && empresa.user?.indBloqueado == 1) {
+          try {
+            await _adminService.changeStatusUser(empresa.user!.codUsuario, 0);
+            sucesso++;
+          } catch (_) { erros++; }
+        }
+      }
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Processo Concluído'),
+          content: Text('Desbloqueadas: $sucesso\nErros: $erros\nTotal: ${empresas.length}'),
+          actions: [TextButton(onPressed: () { Navigator.of(context).pop(); setState(() {}); }, child: const Text('OK'))],
+        ),
+      );
+    } catch (e) {
+      Navigator.of(context).pop();
+      showToast(context, 'Erro ao desbloquear empresas: $e');
+    }
+  }
+
   Future<void> _bloquearTodasEmpresas() async {
     // Confirmação antes de bloquear
     final confirmacao = await showDialog<bool>(
@@ -392,7 +516,11 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
           title: 'Empresas',
           scaffoldKey: scaffoldKey,
           actions: [
-            // Botão para bloquear todas as empresas
+            IconButton(
+              icon: const Icon(Icons.lock_open_rounded, color: Colors.green),
+              tooltip: 'Desbloquear todas as empresas',
+              onPressed: () => _desbloquearTodasEmpresas(),
+            ),
             IconButton(
               icon: Icon(Icons.delete_sweep_rounded, color: AdminColors.textPrimary),
               tooltip: 'Bloquear todas as empresas',
@@ -544,25 +672,22 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
               _buildActionButton(
                 icon: Icons.edit_rounded,
                 label: 'Editar',
-                onTap: () {
-                  // TODO: Implementar edição
-                  showToast(context, 'Funcionalidade em desenvolvimento');
-                },
+                onTap: () => _editarEmpresa(empresa),
               ),
               SizedBox(width: 8),
               _buildActionButton(
                 icon: isBloqueada ? Icons.lock_open_rounded : Icons.lock_rounded,
                 label: isBloqueada ? 'Desbloquear' : 'Bloquear',
-                onTap: () {
+                onTap: () async {
                   if (empresa.user?.indBloqueado == 1) {
-                    _adminService.changeStatusUser(empresa.user!.codUsuario, 0);
+                    await _adminService.changeStatusUser(empresa.user!.codUsuario, 0);
                     empresa.user!.indBloqueado = 0;
                   } else if (empresa.user?.indBloqueado == null ||
                       empresa.user?.indBloqueado == 0) {
-                    _adminService.changeStatusUser(empresa.user!.codUsuario, 1);
+                    await _adminService.changeStatusUser(empresa.user!.codUsuario, 1);
                     empresa.user!.indBloqueado = 1;
                   }
-                  setState(() {});
+                  if (mounted) setState(() {});
                 },
               ),
               SizedBox(width: 8),

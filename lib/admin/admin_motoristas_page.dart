@@ -429,6 +429,116 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
     );
   }
 
+  Future<void> _editarMotorista(Motorista motorista) async {
+    final nomeCtrl = TextEditingController(text: motorista.desNomeFantasia ?? motorista.desRazaoSocial ?? '');
+    await showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(borderRadius: BorderRadius.vertical(top: Radius.circular(24))),
+      backgroundColor: AdminColors.cardWhite,
+      builder: (ctx) => Padding(
+        padding: EdgeInsets.only(
+          left: 24, right: 24, top: 24,
+          bottom: MediaQuery.of(ctx).viewInsets.bottom + 24,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Editar Motorista', style: GoogleFonts.poppins(fontSize: 20, fontWeight: FontWeight.w700, color: AdminColors.textPrimary)),
+            const SizedBox(height: 20),
+            TextFormField(
+              controller: nomeCtrl,
+              style: GoogleFonts.poppins(fontSize: 15, color: AdminColors.textPrimary),
+              decoration: InputDecoration(
+                labelText: 'Nome',
+                labelStyle: GoogleFonts.poppins(color: AdminColors.textSecondary),
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AdminColors.borderColor)),
+                focusedBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: AdminColors.primaryRed, width: 2)),
+              ),
+            ),
+            const SizedBox(height: 20),
+            SizedBox(
+              width: double.infinity,
+              height: 50,
+              child: ElevatedButton(
+                onPressed: () async {
+                  final codUsuario = motorista.user?.codUsuario;
+                  if (codUsuario == null) { showToast(ctx, 'Usuário não identificado'); return; }
+                  final novoNome = nomeCtrl.text.trim();
+                  if (novoNome.isEmpty) { showToast(ctx, 'Informe o nome'); return; }
+                  try {
+                    await _adminService.editarUsuario(codUsuario, novoNome);
+                    motorista.desNomeFantasia = novoNome;
+                    motorista.desRazaoSocial = novoNome;
+                    Navigator.of(ctx).pop();
+                    showToast(context, 'Motorista atualizado com sucesso!');
+                    setState(() {});
+                  } catch (e) {
+                    showToast(ctx, 'Erro ao editar: $e');
+                  }
+                },
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AdminColors.primaryRed,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                ),
+                child: Text('Salvar', style: GoogleFonts.poppins(fontSize: 16, fontWeight: FontWeight.w600, color: Colors.white)),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _desbloquearTodosMotoristas() async {
+    final confirmacao = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmar Ação'),
+        content: const Text('Você está prestes a DESBLOQUEAR todos os motoristas cadastrados.\n\nDeseja continuar?'),
+        actions: [
+          TextButton(onPressed: () => Navigator.of(context).pop(false), child: const Text('Cancelar')),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            style: TextButton.styleFrom(foregroundColor: Colors.green),
+            child: const Text('DESBLOQUEAR TODOS'),
+          ),
+        ],
+      ),
+    );
+    if (confirmacao != true) return;
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (context) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final motoristas = await _userService?.buscaMotoristas() ?? [];
+      int sucesso = 0, erros = 0;
+      for (var m in motoristas) {
+        if (m.user?.codUsuario != null && m.user?.indBloqueado == 1) {
+          try {
+            await _adminService.changeStatusUser(m.user!.codUsuario, 0);
+            sucesso++;
+          } catch (_) { erros++; }
+        }
+      }
+      Navigator.of(context).pop();
+      showDialog(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Processo Concluído'),
+          content: Text('Desbloqueados: $sucesso\nErros: $erros\nTotal: ${motoristas.length}'),
+          actions: [TextButton(onPressed: () { Navigator.of(context).pop(); setState(() {}); }, child: const Text('OK'))],
+        ),
+      );
+    } catch (e) {
+      Navigator.of(context).pop();
+      showToast(context, 'Erro ao desbloquear motoristas: $e');
+    }
+  }
+
   Future<void> _bloquearTodosMotoristas() async {
     // Confirmação antes de bloquear
     final confirmacao = await showDialog<bool>(
@@ -534,13 +644,16 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
           title: 'Motoristas',
           scaffoldKey: scaffoldKey,
           actions: [
-            // Botão para excluir todos os motoristas
+            IconButton(
+              icon: const Icon(Icons.lock_open_rounded, color: Colors.green),
+              tooltip: 'Desbloquear todos os motoristas',
+              onPressed: () => _desbloquearTodosMotoristas(),
+            ),
             IconButton(
               icon: Icon(Icons.delete_forever_rounded, color: Colors.red),
               tooltip: 'Excluir todos os motoristas',
               onPressed: () => _excluirTodosMotoristas(),
             ),
-            // Botão para bloquear todos os motoristas
             IconButton(
               icon: Icon(Icons.block_rounded, color: AdminColors.textPrimary),
               tooltip: 'Bloquear todos os motoristas',
@@ -691,10 +804,7 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
               _buildActionButton(
                 icon: Icons.edit_rounded,
                 label: 'Editar',
-                onTap: () {
-                  // TODO: Implementar edição
-                  showToast(context, 'Funcionalidade em desenvolvimento');
-                },
+                onTap: () => _editarMotorista(motorista),
               ),
               _buildActionButton(
                 icon: isBloqueado ? Icons.lock_open_rounded : Icons.lock_rounded,

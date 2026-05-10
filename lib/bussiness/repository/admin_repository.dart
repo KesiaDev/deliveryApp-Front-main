@@ -72,11 +72,24 @@ class AdminRespository {
   Future<void> saveTaxa(ValoresTaxas config) async {
     _dio.options.headers["Authorization"] =
         "Bearer ${ApiBaseHelper.userSessao!.jwt}";
-    // ignore: deprecated_member_use
-
-    final response = await _dio.post(
+    await _dio.post(
       "/private/sys/save",
       data: json.encode(config.toJson()),
+    );
+  }
+
+  Future<void> excluirTaxa(int numSeq) async {
+    _dio.options.headers["Authorization"] =
+        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+    await _dio.delete("/private/sys/taxa/$numSeq");
+  }
+
+  Future<void> editarUsuario(int codUsuario, String desNome) async {
+    _dio.options.headers["Authorization"] =
+        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+    await _dio.post(
+      "/private/user/$codUsuario/edit",
+      data: json.encode({"desNome": desNome}),
     );
   }
 
