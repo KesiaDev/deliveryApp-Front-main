@@ -76,7 +76,7 @@ class PaymentService {
     throw Exception('Erro ao gerar PIX: status ${response.statusCode}');
   }
 
-  /// Processa um pagamento
+  /// Processa um pagamento PIX (retorna dados para exibir QR Code)
   static Future<PaymentResponse> processPayment(PaymentRequest request) async {
     if (request.method == PaymentMethod.pix) {
       try {
@@ -94,7 +94,6 @@ class PaymentService {
           timestamp: DateTime.now(),
           method: request.method,
           amount: request.amount,
-          // Dados extras PIX embutidos no paymentData via extensão abaixo
         );
       } catch (e) {
         return PaymentResponse(
@@ -109,18 +108,41 @@ class PaymentService {
       }
     }
 
-    // Mock de sucesso para outros métodos (dinheiro, cartão, etc.)
-    await Future.delayed(const Duration(seconds: 2));
-
+    // Dinheiro — sem processamento online
     return PaymentResponse(
       id: 'resp_${DateTime.now().millisecondsSinceEpoch}',
       paymentId: request.id,
       success: true,
-      transactionId: 'TXN_${DateTime.now().millisecondsSinceEpoch}',
+      transactionId: 'CASH_${DateTime.now().millisecondsSinceEpoch}',
       timestamp: DateTime.now(),
       method: request.method,
       amount: request.amount,
     );
+  }
+
+  /// Verifica se um pagamento PIX foi confirmado no Asaas
+  static Future<bool> verifyPixPayment(String asaasPaymentId) async {
+    final jwt = ApiBaseHelper.userSessao?.jwt;
+    final dio = Dio(BaseOptions(
+      baseUrl: ApiBaseHelper.baseUrl,
+      connectTimeout: const Duration(seconds: 15),
+      receiveTimeout: const Duration(seconds: 15),
+      headers: {
+        HttpHeaders.authorizationHeader: jwt != null ? 'Bearer $jwt' : '',
+      },
+    ));
+    try {
+      final response =
+          await dio.get('/private/payment/$asaasPaymentId/status');
+      if (response.statusCode == 200) {
+        final status =
+            (response.data as Map<String, dynamic>)['status'] as String? ?? '';
+        return status == 'RECEIVED' || status == 'CONFIRMED';
+      }
+      return false;
+    } catch (_) {
+      return false;
+    }
   }
 
   /// Gera QR Code PIX real via API — retorna o pixCopyPaste

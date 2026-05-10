@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import '../models/payment_model.dart';
 import '../services/payment_service.dart';
 import 'pix_qr_code_screen.dart';
+import 'card_payment_screen.dart';
 
 /// Tela de revisão e confirmação de pagamento isolada
 class PaymentReviewScreen extends StatefulWidget {
@@ -27,111 +28,60 @@ class _PaymentReviewScreenState extends State<PaymentReviewScreen> {
   bool _isProcessing = false;
 
   Future<void> _processPayment() async {
-    setState(() => _isProcessing = true);
+    if (widget.method == PaymentMethod.pix) {
+      setState(() => _isProcessing = true);
+      try {
+        final pixData = await PaymentService.generatePixQrCode(
+          amount: widget.amount,
+          description: widget.description ?? 'Corrida #${widget.corridaId}',
+          corridaId: widget.corridaId,
+        );
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
 
-    try {
-      if (widget.method == PaymentMethod.pix) {
-        await _processPixPayment();
-        return;
-      }
-
-      // Outros métodos (cartão, dinheiro, etc.)
-      final request = PaymentRequest(
-        id: 'pay_${DateTime.now().millisecondsSinceEpoch}',
-        corridaId: widget.corridaId,
-        amount: widget.amount,
-        method: widget.method,
-        description: widget.description,
-      );
-
-      final response = await PaymentService.processPayment(request);
-
-      if (mounted) {
-        if (response.success) {
-          Navigator.of(context).pop(true);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Pagamento processado com sucesso!'),
-              backgroundColor: Colors.green,
+        final paid = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => PixQrCodeScreen(
+              corridaId: widget.corridaId,
+              asaasPaymentId: pixData.paymentId,
+              amount: widget.amount,
+              pixCopyPaste: pixData.pixCopyPaste,
+              qrCodeImage: pixData.qrCodeImage,
             ),
-          );
-        } else {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(response.errorMessage ?? 'Erro ao processar pagamento'),
-              backgroundColor: Colors.red,
-            ),
-          );
-        }
-      }
-    } catch (e) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao processar pagamento: $e'),
-            backgroundColor: Colors.red,
           ),
         );
+        if (!mounted) return;
+        if (paid == true) Navigator.of(context).pop(true);
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Erro ao gerar PIX: $e'),
+            backgroundColor: Colors.red,
+          ));
+        }
       }
-    } finally {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-      }
+      return;
     }
-  }
 
-  Future<void> _processPixPayment() async {
-    try {
-      final pixData = await PaymentService.generatePixQrCode(
-        amount: widget.amount,
-        description: widget.description ?? 'Corrida #${widget.corridaId}',
-        corridaId: widget.corridaId,
-      );
-
-      if (!mounted) return;
-
-      setState(() => _isProcessing = false);
-
+    if (widget.method == PaymentMethod.creditCard ||
+        widget.method == PaymentMethod.debitCard) {
       final paid = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
-          builder: (_) => PixQrCodeScreen(
+          builder: (_) => CardPaymentScreen(
             corridaId: widget.corridaId,
             amount: widget.amount,
-            pixCopyPaste: pixData.pixCopyPaste,
-            qrCodeImage: pixData.qrCodeImage,
+            description: widget.description,
           ),
         ),
       );
-
       if (!mounted) return;
-
-      if (paid == true) {
-        Navigator.of(context).pop(true);
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pagamento confirmado!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Pagamento cancelado'),
-            backgroundColor: Colors.orange,
-          ),
-        );
-      }
-    } catch (e) {
-      if (mounted) {
-        setState(() => _isProcessing = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Erro ao gerar PIX: $e'),
-            backgroundColor: Colors.red,
-          ),
-        );
-      }
+      if (paid == true) Navigator.of(context).pop(true);
+      return;
     }
+
+    // Dinheiro / outros
+    Navigator.of(context).pop(true);
   }
 
   @override

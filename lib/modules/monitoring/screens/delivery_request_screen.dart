@@ -9,8 +9,7 @@ import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:delivery_front/modules/payments/services/payment_service.dart';
 import 'package:delivery_front/modules/payments/screens/pix_qr_code_screen.dart';
-import 'package:delivery_front/modules/payments/screens/payment_review_screen.dart';
-import 'package:delivery_front/modules/payments/models/payment_model.dart';
+import 'package:delivery_front/modules/payments/screens/card_payment_screen.dart';
 import '../services/live_ride_service.dart';
 import 'waiting_driver_screen.dart';
 
@@ -316,6 +315,7 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
           MaterialPageRoute(
             builder: (_) => PixQrCodeScreen(
               corridaId: tempRef,
+              asaasPaymentId: pixData.paymentId,
               amount: _price,
               pixCopyPaste: pixData.pixCopyPaste,
               qrCodeImage: pixData.qrCodeImage,
@@ -335,10 +335,9 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
     if (_paymentType == 'cartao') {
       final paid = await Navigator.of(context).push<bool>(
         MaterialPageRoute(
-          builder: (_) => PaymentReviewScreen(
+          builder: (_) => CardPaymentScreen(
             corridaId: tempRef,
             amount: _price,
-            method: PaymentMethod.creditCard,
             description: desc,
           ),
         ),

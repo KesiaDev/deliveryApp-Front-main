@@ -3,10 +3,12 @@ import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_fonts/google_fonts.dart';
+import '../services/payment_service.dart';
 
 /// Tela de exibição do QR Code PIX para pagamento
 class PixQrCodeScreen extends StatefulWidget {
   final String corridaId;
+  final String asaasPaymentId; // ID real do pagamento no Asaas para verificação
   final double amount;
   final String pixCopyPaste;
   final String qrCodeImage; // base64
@@ -14,6 +16,7 @@ class PixQrCodeScreen extends StatefulWidget {
   const PixQrCodeScreen({
     Key? key,
     required this.corridaId,
+    required this.asaasPaymentId,
     required this.amount,
     required this.pixCopyPaste,
     required this.qrCodeImage,
@@ -27,6 +30,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
   static const int _totalSeconds = 600; // 10 minutos
   int _remainingSeconds = _totalSeconds;
   Timer? _timer;
+  bool _isVerifying = false;
 
   @override
   void initState() {
@@ -312,6 +316,35 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
     );
   }
 
+  Future<void> _confirmPayment() async {
+    setState(() => _isVerifying = true);
+    try {
+      final confirmed =
+          await PaymentService.verifyPixPayment(widget.asaasPaymentId);
+      if (!mounted) return;
+      if (confirmed) {
+        Navigator.of(context).pop(true);
+      } else {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+              'Pagamento ainda não confirmado. Aguarde alguns instantes e tente novamente.',
+              style: GoogleFonts.poppins(fontSize: 13),
+            ),
+            backgroundColor: Colors.orange,
+            duration: const Duration(seconds: 4),
+          ),
+        );
+      }
+    } catch (_) {
+      if (!mounted) return;
+      // Se não conseguir verificar, confia no usuário
+      Navigator.of(context).pop(true);
+    } finally {
+      if (mounted) setState(() => _isVerifying = false);
+    }
+  }
+
   Widget _buildActionButtons() {
     return Column(
       children: [
@@ -319,21 +352,28 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
           width: double.infinity,
           height: 50,
           child: ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
+            onPressed: _isVerifying ? null : _confirmPayment,
             style: ElevatedButton.styleFrom(
               backgroundColor: Colors.green,
               shape: RoundedRectangleBorder(
                 borderRadius: BorderRadius.circular(12),
               ),
             ),
-            child: Text(
-              'Já paguei',
-              style: GoogleFonts.poppins(
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
-              ),
-            ),
+            child: _isVerifying
+                ? const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(
+                        color: Colors.white, strokeWidth: 2),
+                  )
+                : Text(
+                    'Já paguei',
+                    style: GoogleFonts.poppins(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w600,
+                      color: Colors.white,
+                    ),
+                  ),
           ),
         ),
         const SizedBox(height: 12),
@@ -341,7 +381,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
           width: double.infinity,
           height: 50,
           child: OutlinedButton(
-            onPressed: () => Navigator.of(context).pop(false),
+            onPressed: _isVerifying ? null : () => Navigator.of(context).pop(false),
             style: OutlinedButton.styleFrom(
               side: const BorderSide(color: Colors.grey),
               shape: RoundedRectangleBorder(
