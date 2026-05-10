@@ -19,6 +19,7 @@ import 'package:delivery_front/empresa/corridas/lista_solicitacoes_empresa_page.
 import 'package:delivery_front/ui/home_page_modern.dart';
 import 'package:delivery_front/ui/corridas_list_page.dart';
 import 'package:delivery_front/home/map_page.dart';
+import 'package:delivery_front/modules/monitoring/screens/available_rides_screen.dart';
 import 'package:delivery_front/saldos/saldos_page.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:delivery_front/shared/terms_of_use.dart';
@@ -70,6 +71,52 @@ class AppWidget extends StatelessWidget {
         decorationColor: Colors.black,
         displayColor: Colors.white,
       ),
+    );
+  }
+
+  ThemeData _buildDarkTheme() {
+    final base = ThemeData.dark();
+    return base.copyWith(
+      colorScheme: const ColorScheme.dark(
+        primary: Color(0xFFE53935),
+        secondary: Color(0xFFE53935),
+        surface: Color(0xFF1E1E1E),
+      ),
+      primaryColor: const Color(0xFFE53935),
+      scaffoldBackgroundColor: const Color(0xFF121212),
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Color(0xFF1E1E1E),
+        foregroundColor: Colors.white,
+        elevation: 0,
+      ),
+      cardColor: const Color(0xFF1E1E1E),
+      drawerTheme: const DrawerThemeData(
+        backgroundColor: Color(0xFF1E1E1E),
+      ),
+      inputDecorationTheme: InputDecorationTheme(
+        labelStyle: const TextStyle(color: Colors.white70),
+        hintStyle: const TextStyle(color: Colors.white38),
+        focusedBorder: OutlineInputBorder(
+          borderSide: const BorderSide(color: Color(0xFFE53935)),
+          borderRadius: BorderRadius.circular(32),
+        ),
+        enabledBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(32),
+          borderSide: const BorderSide(color: Colors.white24),
+        ),
+      ),
+      textTheme: base.textTheme.apply(
+        bodyColor: Colors.white,
+        decorationColor: Colors.white,
+        displayColor: Colors.white,
+      ),
+      elevatedButtonTheme: ElevatedButtonThemeData(
+        style: ElevatedButton.styleFrom(
+          backgroundColor: const Color(0xFFE53935),
+          foregroundColor: Colors.white,
+        ),
+      ),
+      dividerColor: Colors.white12,
     );
   }
 
@@ -247,6 +294,17 @@ class AppWidget extends StatelessWidget {
         final indTipoDefault = args?['indTipoDefault'] as int? ?? 99;
         // Usar página moderna para motorista
         if (ApiBaseHelper.userSessao?.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA) {
+          // Novas corridas → Firebase real-time (AvailableRidesScreen)
+          if (indTipoDefault == ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA) {
+            final user = ApiBaseHelper.userSessao!;
+            return MaterialPageRoute<dynamic>(
+              settings: settings,
+              builder: (_) => AvailableRidesScreen(
+                motoristaId: user.codUsuario?.toString() ?? '',
+                motoristaName: user.desNome ?? 'Motorista',
+              ),
+            );
+          }
           return MaterialPageRoute<dynamic>(
             settings: settings,
             builder: (_) => CorridasListPage(
@@ -309,6 +367,8 @@ class AppWidget extends StatelessWidget {
       title: 'Fool Delivery',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
+      darkTheme: _buildDarkTheme(),
+      themeMode: ThemeMode.system,
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,

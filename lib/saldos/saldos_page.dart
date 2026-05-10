@@ -187,11 +187,17 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
     var userNew = user;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux = userNew.usuarioResp!.motoristas!.first.codMotorista;
+      final motoristas = userNew.usuarioResp?.motoristas;
+      if (motoristas != null && motoristas.isNotEmpty) {
+        codMotAux = motoristas.first.codMotorista;
+      }
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux = userNew.usuarioResp!.empresas!.first.codEmpresa;
+      final empresas = userNew.usuarioResp?.empresas;
+      if (empresas != null && empresas.isNotEmpty) {
+        codEmAux = empresas.first.codEmpresa;
+      }
     }
 
     return FutureBuilder<List<SaldosCorrida>>(
@@ -257,7 +263,7 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                   icon: Icons.motorcycle_rounded,
                   title: 'Valor total de corridas',
                   subtitle:
-                      'R\$ ${corridasApagar.vlrTotal ?? 0} a receber. R\$ ${corridasPagas.vlrTotal ?? 0} já pago',
+                      'R\$ ${(corridasApagar.vlrTotal?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} a receber. R\$ ${(corridasPagas.vlrTotal?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} já pago',
                 ),
                   SizedBox(
                     height: 15.0,
@@ -265,13 +271,13 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                   TaskColumn(
                     icon: Icons.place,
                     title: 'A receber',
-                    subtitle: 'R\$ ${corridasApagar.vlrTotal ?? 0}',
+                    subtitle: 'R\$ ${(corridasApagar.vlrTotal?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
                   ),
                   SizedBox(height: 15.0),
                   TaskColumn(
                     icon: Icons.check_circle_outline,
                     title: 'Recebido',
-                    subtitle: 'R\$ ${corridasPagas.vlrTotal ?? 0}',
+                    subtitle: 'R\$ ${(corridasPagas.vlrTotal?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
                   ),
                   Visibility(
                     visible: ApiBaseHelper.userSessao!.indTipo ==
@@ -325,7 +331,7 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                     icon: Icons.motorcycle_rounded,
                     title: 'Valor total de corridas',
                     subtitle:
-                        'R\$ ${corridasApagar.vlrTotalRestaurante ?? 0} a pagar. R\$ ${corridasPagas.vlrTotalRestaurante ?? 0} em andamento',
+                        'R\$ ${(corridasApagar.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} a pagar. R\$ ${(corridasPagas.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} em andamento',
                   ),
                   SizedBox(
                     height: 15.0,
@@ -333,13 +339,13 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                   TaskColumn(
                     icon: Icons.place,
                     title: 'A pagar',
-                    subtitle: 'R\$ ${corridasApagar.vlrTotalRestaurante ?? 0}',
+                    subtitle: 'R\$ ${(corridasApagar.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
                   ),
                   SizedBox(height: 15.0),
                   TaskColumn(
                     icon: Icons.check_circle_outline,
                     title: 'Pago',
-                    subtitle: 'R\$ ${corridasPagas.vlrTotalRestaurante ?? 0}',
+                    subtitle: 'R\$ ${(corridasPagas.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
                   ),
                   Visibility(
                     visible: ApiBaseHelper.userSessao!.indTipo ==
