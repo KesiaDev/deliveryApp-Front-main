@@ -57,10 +57,11 @@ class _ListaSolicitacoesMotoristaPageState
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
         Navigator.pop(context, true);
-        return Future<bool>.value(true);
       },
       child: Scaffold(
         appBar: AppBar(

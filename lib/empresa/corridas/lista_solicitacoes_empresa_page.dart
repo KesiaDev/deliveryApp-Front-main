@@ -51,10 +51,11 @@ class _ListaSolicitacoesEmpresaPageState
 
   @override
   Widget build(BuildContext context) {
-    return WillPopScope(
-      onWillPop: () {
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, _) {
+        if (didPop) return;
         Navigator.pop(context, true);
-        return Future<bool>.value(true);
       },
       child: Scaffold(
         floatingActionButton: null, // Removido FAB - botão de filtro será colocado na AppBar
@@ -324,9 +325,13 @@ class ListaCemMotoristaView extends StatelessWidget {
             " - Fim corrida:" +
             ApiBaseHelper.getDtaFormatada(amigo.dthFinalizacaoCorrida);
 
-      if (amigo.desEnderecoEntrega != null)
-        subtitleEndere = subtitleEndere + amigo.desEnderecoEntrega! + " - ";
-      //+ amigo.desNumeroEndereco!;
+      if (amigo.desEnderecoEntrega != null) {
+        subtitleEndere = subtitleEndere + amigo.desEnderecoEntrega!;
+        if (amigo.desNumeroEndereco != null && amigo.desNumeroEndereco!.isNotEmpty) {
+          subtitleEndere = subtitleEndere + ', ' + amigo.desNumeroEndereco!;
+        }
+        subtitleEndere = subtitleEndere + ' - ';
+      }
 
       if (amigo.desObsCorrida != null)
         subtitleObsEntrega = subtitleObsEntrega + amigo.desObsCorrida!;
@@ -350,43 +355,46 @@ class ListaCemMotoristaView extends StatelessWidget {
       Row(
         mainAxisSize: MainAxisSize.min,
         children: <Widget>[
-          //Text(subtitle),
+          if (amigo.indStatusCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA)
             ElevatedButton(
-            onPressed: () {
-              if (ApiBaseHelper.userSessao!.indTipo ==
-                  ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA) {
-                if (isFinalizado) {
-                  LoginControler.showToast(_context,
-                      "Não é possível alterar o status de uma corrida já encerrada.");
-                } else {
-                  if (ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA ==
-                      tipoProcesso) {
-                    showAlertDialog(
-                        _context, amigo.numSeq!, _controller, tipoProcesso, amigo);
-                  } else {
-                    LoginControler.showToast(
-                        _context, "Aguardando motorista encerrar a corrida.");
-                  }
-                }
-              }
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: Utils.getColorStatusCorrida(tipoProcesso),
-              padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              shape: RoundedRectangleBorder(
+              onPressed: () {
+                showAlertDialog(
+                    _context, amigo.numSeq!, _controller, ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA, amigo);
+              },
+              style: ElevatedButton.styleFrom(
+                backgroundColor: Colors.red.shade700,
+                padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                elevation: 0,
+              ),
+              child: Text(
+                'Cancelar',
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Colors.white,
+                ),
+              ),
+            )
+          else if (!isFinalizado)
+            Container(
+              padding: EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: Utils.getColorStatusCorrida(amigo.indStatusCorrida).withOpacity(0.15),
                 borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: Utils.getColorStatusCorrida(amigo.indStatusCorrida), width: 1),
               ),
-              elevation: 0,
-            ),
-            child: Text(
-              subtitle,
-              style: GoogleFonts.poppins(
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                color: Colors.white,
+              child: Text(
+                Utils.getDesStatusCorrida(amigo.indStatusCorrida),
+                style: GoogleFonts.poppins(
+                  fontSize: 12,
+                  fontWeight: FontWeight.w600,
+                  color: Utils.getColorStatusCorrida(amigo.indStatusCorrida),
+                ),
               ),
             ),
-          ),
         ],
       ),
       subtitleaux,

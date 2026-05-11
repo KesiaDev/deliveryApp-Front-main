@@ -247,9 +247,11 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
     // Pagamento obrigatório antes de liberar pro motorista (exceto dinheiro)
     if (_paymentType != 'dinheiro') {
       final paid = await _processPayment();
+      if (!mounted) return;
       if (!paid) return;
     }
 
+    if (!mounted) return;
     setState(() => _isRequesting = true);
     try {
       final rideId = await LiveRideService.createRide(
@@ -342,6 +344,7 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
           ),
         ),
       );
+      if (!mounted) return false;
       return paid == true;
     }
 

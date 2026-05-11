@@ -81,6 +81,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
   }
 
   void _showExpiredDialog() {
+    if (!mounted) return;
     showDialog(
       context: context,
       barrierDismissible: false,
@@ -96,8 +97,8 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
         actions: [
           TextButton(
             onPressed: () {
-              Navigator.of(ctx).pop();
-              Navigator.of(context).pop(false);
+              Navigator.of(ctx).pop(); // fecha o dialog
+              if (mounted) Navigator.of(context).pop(false); // volta à tela anterior
             },
             child: Text('OK', style: GoogleFonts.poppins()),
           ),
@@ -317,6 +318,7 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
   }
 
   Future<void> _confirmPayment() async {
+    if (!mounted) return;
     setState(() => _isVerifying = true);
     try {
       final confirmed =
@@ -335,13 +337,11 @@ class _PixQrCodeScreenState extends State<PixQrCodeScreen> {
             duration: const Duration(seconds: 4),
           ),
         );
+        setState(() => _isVerifying = false);
       }
     } catch (_) {
       if (!mounted) return;
-      // Se não conseguir verificar, confia no usuário
       Navigator.of(context).pop(true);
-    } finally {
-      if (mounted) setState(() => _isVerifying = false);
     }
   }
 

@@ -10,8 +10,8 @@ class DialogBuilder {
       context: context,
       barrierDismissible: false,
       builder: (BuildContext context) {
-        return WillPopScope(
-            onWillPop: () async => false,
+        return PopScope(
+            canPop: false,
             child: AlertDialog(
               shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.all(Radius.circular(8.0))),
