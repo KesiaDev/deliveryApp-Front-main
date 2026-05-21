@@ -360,6 +360,9 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
                                 )
                               : ListView.separated(
                                   itemCount: _ultimasSolicitacoes.length,
+                                              shrinkWrap: true,
+                                  physics: const NeverScrollableScrollPhysics(),
+
                                   separatorBuilder: (_, __) => const SizedBox(height: 12),
                                   itemBuilder: (context, index) {
                                     final solicitacao = _ultimasSolicitacoes[index];
