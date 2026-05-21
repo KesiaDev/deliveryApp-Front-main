@@ -3,6 +3,8 @@ import 'package:flutter/foundation.dart';
 import 'package:delivery_front/shared/services/local_storage_service.dart';
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:dio/dio.dart';
+import 'package:delivery_front/services/advanced_notification_service.dart';
+
 
 class FirebaseMessagingService {
   static final _messaging = FirebaseMessaging.instance;
@@ -54,15 +56,17 @@ class FirebaseMessagingService {
       });
 
       FirebaseMessaging.onMessageOpenedApp.listen((message) {
-        debugPrint('📱 ==========================================');
-        debugPrint('📱 APP ABERTO VIA NOTIFICAÇÃO');
-        debugPrint('📱 Título: ${message.notification?.title}');
-        debugPrint('📱 ==========================================');
+                debugPrint('📱 APP ABERTO VIA NOTIFICAÇÃO');
+        _navegarParaCorridas();
+
       });
 
       RemoteMessage? initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) {
         debugPrint('📱 App foi aberto por notificação (estava fechado)');
+              await Future.delayed(const Duration(milliseconds: 500));
+      _navegarParaCorridas();
+
       }
     } catch (e) {
       debugPrint('❌ Erro ao inicializar Firebase Messaging: $e');
@@ -90,5 +94,16 @@ class FirebaseMessagingService {
       debugPrint('⚠️ Falha ao sincronizar token FCM: $e');
     }
   }
+    static void _navegarParaCorridas() {
+    try {
+      final context = AdvancedNotificationService.navigatorKey.currentContext;
+      if (context != null) {
+        Navigator.of(context).pushNamed('/corridas');
+      }
+    } catch (e) {
+      debugPrint('⚠️ Erro ao navegar para corridas: $e');
+    }
+  }
+
 }
 
