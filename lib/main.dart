@@ -60,11 +60,6 @@ Future<void> initOneSignal() async {
   OneSignal.Debug.setLogLevel(OSLogLevel.verbose);
   OneSignal.initialize("2854750a-4282-4e06-9b17-3127cd90f012");
 
-  final osUserID = await OneSignal.User.getOnesignalId();
-  if (osUserID != null) {
-    await LocalStorageService.setTokenFCM(osUserID);
-  }
-
   await OneSignal.Notifications.requestPermission(true);
   // Handlers adicionais podem ser configurados conforme necessidade.
 }
