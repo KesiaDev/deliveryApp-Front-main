@@ -158,7 +158,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   void _buscaChamadosLeitura() {
     _chamadosPollingTimer?.cancel();
-    _chamadosPollingTimer = Timer.periodic(const Duration(seconds: 30), (timer) async {
+    _chamadosPollingTimer = Timer.periodic(const Duration(seconds: 10), (timer) async {
       if (_isDisposed || !mounted) {
         timer.cancel();
         return;
