@@ -4,6 +4,7 @@ import '../models/payment_model.dart';
 import '../services/payment_service.dart';
 import 'pix_qr_code_screen.dart';
 import 'card_payment_screen.dart';
+import 'boleto_screen.dart';
 
 /// Tela de revisão e confirmação de pagamento isolada
 class PaymentReviewScreen extends StatefulWidget {
@@ -28,6 +29,14 @@ class _PaymentReviewScreenState extends State<PaymentReviewScreen> {
   bool _isProcessing = false;
 
   Future<void> _processPayment() async {
+    if (widget.method == PaymentMethod.pix && widget.amount < 5.0) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+        content: Text('Valor mínimo para pagamento via PIX é R\$ 5,00'),
+        backgroundColor: Colors.orange,
+      ));
+      return;
+    }
+
     if (widget.method == PaymentMethod.pix) {
       setState(() => _isProcessing = true);
       try {
@@ -77,6 +86,46 @@ class _PaymentReviewScreenState extends State<PaymentReviewScreen> {
       );
       if (!mounted) return;
       if (paid == true) Navigator.of(context).pop(true);
+      return;
+    }
+
+    if (widget.method == PaymentMethod.boleto) {
+      if (widget.amount < 5.0) {
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
+          content: Text('Valor mínimo para boleto é R\$ 5,00'),
+          backgroundColor: Colors.orange,
+        ));
+        return;
+      }
+      setState(() => _isProcessing = true);
+      try {
+        final boletoData = await PaymentService.generateBoleto(
+          amount: widget.amount,
+          description: widget.description ?? 'Corrida #${widget.corridaId}',
+          corridaId: widget.corridaId,
+        );
+        if (!mounted) return;
+        setState(() => _isProcessing = false);
+
+        final paid = await Navigator.of(context).push<bool>(
+          MaterialPageRoute(
+            builder: (_) => BoletoScreen(
+              corridaId: widget.corridaId,
+              boletoData: boletoData,
+            ),
+          ),
+        );
+        if (!mounted) return;
+        if (paid == true) Navigator.of(context).pop(true);
+      } catch (e) {
+        if (mounted) {
+          setState(() => _isProcessing = false);
+          ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+            content: Text('Erro ao gerar boleto: $e'),
+            backgroundColor: Colors.red,
+          ));
+        }
+      }
       return;
     }
 

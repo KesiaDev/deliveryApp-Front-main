@@ -3,6 +3,35 @@ import 'package:dio/dio.dart';
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import '../models/payment_model.dart';
 
+class _BoletoApiResponse {
+  final String paymentId;
+  final String status;
+  final String bankSlipUrl;
+  final String identificationField;
+  final String dueDate;
+  final double value;
+
+  _BoletoApiResponse({
+    required this.paymentId,
+    required this.status,
+    required this.bankSlipUrl,
+    required this.identificationField,
+    required this.dueDate,
+    required this.value,
+  });
+
+  factory _BoletoApiResponse.fromJson(Map<String, dynamic> json) {
+    return _BoletoApiResponse(
+      paymentId: json['paymentId'] ?? '',
+      status: json['status'] ?? '',
+      bankSlipUrl: json['bankSlipUrl'] ?? '',
+      identificationField: json['identificationField'] ?? '',
+      dueDate: json['dueDate'] ?? '',
+      value: (json['value'] as num).toDouble(),
+    );
+  }
+}
+
 /// Modelo interno para dados da resposta PIX da API
 class _PixApiResponse {
   final String paymentId;
@@ -166,6 +195,61 @@ class PaymentService {
     );
   }
 
+  static Future<_BoletoApiResponse> _callBoletoApi({
+    required double amount,
+    required String description,
+    required String corridaId,
+  }) async {
+    final jwt = ApiBaseHelper.userSessao?.jwt;
+
+    final dio = Dio(BaseOptions(
+      baseUrl: ApiBaseHelper.baseUrl,
+      connectTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
+      receiveTimeout: const Duration(seconds: 30),
+      headers: {
+        HttpHeaders.contentTypeHeader: 'application/json',
+        HttpHeaders.authorizationHeader: jwt != null ? 'Bearer $jwt' : '',
+      },
+    ));
+
+    final body = {
+      'cpfCnpj': _pixCnpj,
+      'name': _pixName,
+      'value': amount,
+      'description': description,
+      'corridaId': corridaId,
+    };
+
+    final response = await dio.post('/privado/pagamento/boleto', data: body);
+
+    if (response.statusCode == 200 || response.statusCode == 201) {
+      return _BoletoApiResponse.fromJson(response.data as Map<String, dynamic>);
+    }
+
+    throw Exception('Erro ao gerar boleto: status ${response.statusCode}');
+  }
+
+  static Future<BoletoData> generateBoleto({
+    required double amount,
+    required String description,
+    required String corridaId,
+  }) async {
+    final resp = await _callBoletoApi(
+      amount: amount,
+      description: description,
+      corridaId: corridaId,
+    );
+
+    return BoletoData(
+      paymentId: resp.paymentId,
+      bankSlipUrl: resp.bankSlipUrl,
+      identificationField: resp.identificationField,
+      dueDate: resp.dueDate,
+      value: resp.value,
+    );
+  }
+
   /// Tokeniza cartão (mock)
   static Future<String> tokenizeCard(CardData cardData) async {
     // TODO: Em produção, tokenizar via gateway
@@ -191,6 +275,22 @@ class PaymentService {
 
     return true;
   }
+}
+
+class BoletoData {
+  final String paymentId;
+  final String bankSlipUrl;
+  final String identificationField;
+  final String dueDate;
+  final double value;
+
+  BoletoData({
+    required this.paymentId,
+    required this.bankSlipUrl,
+    required this.identificationField,
+    required this.dueDate,
+    required this.value,
+  });
 }
 
 /// Dados retornados pela API PIX para exibição do QR Code

@@ -110,11 +110,11 @@ class _CardPaymentScreenState extends State<CardPaymentScreen> {
         final data = response.data as Map<String, dynamic>;
         final status = data['status'] as String? ?? '';
         if (status == 'CONFIRMED' || status == 'RECEIVED') {
-          Navigator.of(context).pop(true);
           ScaffoldMessenger.of(context).showSnackBar(const SnackBar(
             content: Text('Pagamento aprovado!'),
             backgroundColor: Colors.green,
           ));
+          Navigator.of(context).pop(true);
         } else {
           ScaffoldMessenger.of(context).showSnackBar(SnackBar(
             content: Text('Status: $status — aguarde confirmação'),

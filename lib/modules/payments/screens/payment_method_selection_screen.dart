@@ -89,7 +89,6 @@ class _PaymentMethodSelectionScreenState
     final methods = [
       PaymentMethod.pix,
       PaymentMethod.creditCard,
-      PaymentMethod.debitCard,
       PaymentMethod.boleto,
       PaymentMethod.cash,
     ];
