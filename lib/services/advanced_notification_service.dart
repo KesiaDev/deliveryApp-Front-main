@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:firebase_messaging/firebase_messaging.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:onesignal_flutter/onesignal_flutter.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
@@ -7,6 +8,8 @@ import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/shared/widgets/in_app_notification_widget.dart';
 import 'package:flash/flash_helper.dart';
 import 'package:google_fonts/google_fonts.dart';
+
+final _localNotifications = FlutterLocalNotificationsPlugin();
 
 /// Serviço avançado para gerenciar notificações push
 class AdvancedNotificationService {
@@ -52,19 +55,37 @@ class AdvancedNotificationService {
   static void _handleForegroundMessage(RemoteMessage message) {
     final data = message.data;
     final notification = message.notification;
+    final title = notification?.title ?? data['title'] as String? ?? 'Nova notificação';
+    final body = notification?.body ?? data['body'] as String? ?? '';
 
-    // Mostra notificação in-app
-    if (_context != null) {
-      _showInAppNotification(
-        title: notification?.title ?? 'Nova notificação',
-        body: notification?.body ?? '',
-        data: data,
-      );
-    }
+    // Dispara som/vibração via local notification (FCM em foreground não toca som no Android)
+    _localNotifications.show(
+      message.hashCode,
+      title,
+      body,
+      const NotificationDetails(
+        android: AndroidNotificationDetails(
+          'fool_high_importance',
+          'Notificações Fool Entregas',
+          importance: Importance.max,
+          priority: Priority.high,
+          playSound: true,
+          enableVibration: true,
+          icon: '@mipmap/ic_launcher',
+        ),
+      ),
+    );
+
+    // Mostra notificação in-app (usa navigatorKey para garantir contexto dentro do MaterialApp)
+    _showInAppNotification(
+      title: title,
+      body: body,
+      data: data,
+    );
 
     // Log para debug
     Logger.logInfo(
-      'Notificação recebida: ${notification?.title}',
+      'Notificação recebida: $title',
       tag: 'NotificationService',
       meta: {'data': data},
     );
@@ -207,7 +228,9 @@ class AdvancedNotificationService {
     required String body,
     Map<String, dynamic>? data,
   }) {
-    final context = _context ?? navigatorKey.currentContext;
+    // Sempre usa navigatorKey — é dentro do MaterialApp e tem acesso ao Overlay.
+    // _context vem do AppWidget (acima do MaterialApp) e não tem Overlay.
+    final context = navigatorKey.currentContext ?? _context;
     if (context == null) return;
 
     final tipo = data?['tipo'] as String?;

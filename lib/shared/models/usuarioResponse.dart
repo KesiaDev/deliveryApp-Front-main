@@ -234,6 +234,8 @@ class Endereco {
     this.dtaEdicao,
     this.indInativo,
     this.desComplemento,
+    this.desLatitude,
+    this.desLongitude,
   });
 
   int? numSeq;
@@ -250,6 +252,8 @@ class Endereco {
   dynamic? dtaEdicao;
   int? indInativo;
   dynamic? desComplemento;
+  double? desLatitude;
+  double? desLongitude;
 
   factory Endereco.fromJson(Map<String, dynamic> json) => Endereco(
         numSeq: json["numSeq"],
@@ -266,6 +270,12 @@ class Endereco {
         dtaEdicao: json["dtaEdicao"],
         indInativo: json["indInativo"],
         desComplemento: json["desComplemento"],
+        desLatitude: json["desLatitude"] is num
+            ? (json["desLatitude"] as num).toDouble()
+            : double.tryParse(json["desLatitude"]?.toString() ?? ''),
+        desLongitude: json["desLongitude"] is num
+            ? (json["desLongitude"] as num).toDouble()
+            : double.tryParse(json["desLongitude"]?.toString() ?? ''),
       );
 
   Map<String, dynamic> toJson() => {
@@ -283,6 +293,8 @@ class Endereco {
         "dtaEdicao": dtaEdicao,
         "indInativo": indInativo,
         "desComplemento": desComplemento,
+        "desLatitude": desLatitude,
+        "desLongitude": desLongitude,
       };
 }
 

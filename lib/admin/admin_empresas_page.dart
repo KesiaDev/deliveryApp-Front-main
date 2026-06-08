@@ -3,6 +3,9 @@ import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/bussiness/service/FileProcess.dart';
 import 'package:delivery_front/bussiness/service/admin_service.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
+import 'package:delivery_front/modules/payments/screens/empresa_payment_config_screen.dart';
+import 'package:delivery_front/modules/payments/screens/weekly_invoices_screen.dart';
+import 'package:delivery_front/modules/payments/screens/carteira_fool_screen.dart';
 import 'package:delivery_front/shared/models/AcoesEdicaoAdmin.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:delivery_front/admin/admin_components.dart';
@@ -27,10 +30,11 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
     with WidgetsBindingObserver {
   AdminController? _userService;
   AdminService _adminService = AdminService();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   var _indTipoPgto;
-  List<Empresa>? _empresasCache; // Cache da lista de empresas
-  Set<int> _empresasExcluidas = {}; // IDs de empresas excluídas localmente
+  List<Empresa>? _empresasCache;
+  Set<int> _empresasExcluidas = {};
 
   @override
   void initState() {
@@ -51,19 +55,20 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
     List<Empresa>? empre = await _userService?.buscaEmpresas();
 
     if (empre != null) {
-      // Filtra empresas excluídas localmente
       _empresasCache = empre;
-      return empre.where((e) {
+      final filtered = empre.where((e) {
         final codEmpresa = e.codEmpresa;
         final codUsuario = e.user?.codUsuario;
-        // Remove se foi excluída localmente
-        if (codEmpresa != null && _empresasExcluidas.contains(codEmpresa)) {
-          return false;
-        }
-        if (codUsuario != null && _empresasExcluidas.contains(codUsuario)) {
-          return false;
-        }
+        if (codEmpresa != null && _empresasExcluidas.contains(codEmpresa)) return false;
+        if (codUsuario != null && _empresasExcluidas.contains(codUsuario)) return false;
         return true;
+      }).toList();
+
+      // Deduplica por codEmpresa
+      final seenIds = <int>{};
+      return filtered.where((e) {
+        if (e.codEmpresa == null) return true;
+        return seenIds.add(e.codEmpresa!);
       }).toList();
     } else {
       return <Empresa>[];
@@ -126,6 +131,76 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
                 if (novoItemSelecionado.indTipo == 4) {
                   // Excluir empresa
                   _excluirEmpresa(empre);
+                }
+
+                // ── Ação 6: Configurar Pagamentos ──────────────────
+                if (novoItemSelecionado.indTipo == 6) {
+                  final adminName = widget.userInfo.desNome ?? 'Admin';
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => EmpresaPaymentConfigScreen(
+                        empresa: empre,
+                        adminName: adminName,
+                      ),
+                    ),
+                  );
+                }
+
+                // ── Ação 7: Boletos + Carteira ──────────────────────
+                if (novoItemSelecionado.indTipo == 7) {
+                  showModalBottomSheet(
+                    context: context,
+                    shape: const RoundedRectangleBorder(
+                        borderRadius:
+                            BorderRadius.vertical(top: Radius.circular(20))),
+                    builder: (_) => SafeArea(
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          ListTile(
+                            leading: const Icon(Icons.receipt_long_rounded,
+                                color: Color(0xFFE53935)),
+                            title: const Text('Boletos Semanais'),
+                            subtitle: Text(empre.desNomeFantasia ?? ''),
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => WeeklyInvoicesScreen(
+                                    codEmpresa: empre.codEmpresa,
+                                    isAdmin: true,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          ListTile(
+                            leading: const Icon(
+                                Icons.account_balance_wallet_rounded,
+                                color: Colors.green),
+                            title: const Text('Carteira Fool'),
+                            subtitle: Text(empre.desNomeFantasia ?? ''),
+                            onTap: () {
+                              Navigator.pop(context);
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CarteiraFoolScreen(
+                                    codEmpresa: empre.codEmpresa ?? 0,
+                                    empresaName: empre.desNomeFantasia ??
+                                        empre.desRazaoSocial ??
+                                        'Empresa',
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
                 }
 
                 if (novoItemSelecionado.indTipo == 5) {
@@ -507,14 +582,13 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
   }
 
   SafeArea montaTelaEmpresas(double width) {
-    final scaffoldKey = GlobalKey<ScaffoldState>();
     return SafeArea(
       child: Scaffold(
-        key: scaffoldKey,
+        key: _scaffoldKey,
         backgroundColor: AdminColors.background,
         appBar: AdminAppBar(
           title: 'Empresas',
-          scaffoldKey: scaffoldKey,
+          scaffoldKey: _scaffoldKey,
           actions: [
             IconButton(
               icon: const Icon(Icons.lock_open_rounded, color: Colors.green),
@@ -679,11 +753,28 @@ class _AdminEmpresaPage extends State<AdminEmpresaPage>
                 icon: isBloqueada ? Icons.lock_open_rounded : Icons.lock_rounded,
                 label: isBloqueada ? 'Desbloquear' : 'Bloquear',
                 onTap: () async {
+                  final acao = isBloqueada ? 'desbloquear' : 'bloquear';
+                  final confirma = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      title: Text('Confirmar ação'),
+                      content: Text('Deseja $acao a empresa "${empresa.desNomeFantasia ?? empresa.desRazaoSocial}"?'),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.of(ctx).pop(false), child: const Text('Cancelar')),
+                        ElevatedButton(
+                          onPressed: () => Navigator.of(ctx).pop(true),
+                          style: ElevatedButton.styleFrom(backgroundColor: isBloqueada ? Colors.green : Colors.red, shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12))),
+                          child: Text(isBloqueada ? 'Desbloquear' : 'Bloquear', style: const TextStyle(color: Colors.white)),
+                        ),
+                      ],
+                    ),
+                  );
+                  if (confirma != true) return;
                   if (empresa.user?.indBloqueado == 1) {
                     await _adminService.changeStatusUser(empresa.user!.codUsuario, 0);
                     empresa.user!.indBloqueado = 0;
-                  } else if (empresa.user?.indBloqueado == null ||
-                      empresa.user?.indBloqueado == 0) {
+                  } else if (empresa.user?.indBloqueado == null || empresa.user?.indBloqueado == 0) {
                     await _adminService.changeStatusUser(empresa.user!.codUsuario, 1);
                     empresa.user!.indBloqueado = 1;
                   }

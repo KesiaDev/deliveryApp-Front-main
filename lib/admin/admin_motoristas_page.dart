@@ -27,7 +27,8 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
     with WidgetsBindingObserver {
   AdminController? _userService;
   AdminService _adminService = AdminService();
-  final Set<int> _motoristasExcluidos = {}; // Lista de motoristas excluídos localmente
+  final Set<int> _motoristasExcluidos = {};
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   var _indTipoPgto;
 
@@ -635,14 +636,13 @@ class _AdminMotoristaPage extends State<AdminMotoristaPage>
   }
 
   SafeArea montaTelaEmpresas(double width) {
-    final scaffoldKey = GlobalKey<ScaffoldState>();
     return SafeArea(
       child: Scaffold(
-        key: scaffoldKey,
+        key: _scaffoldKey,
         backgroundColor: AdminColors.background,
         appBar: AdminAppBar(
           title: 'Motoristas',
-          scaffoldKey: scaffoldKey,
+          scaffoldKey: _scaffoldKey,
           actions: [
             IconButton(
               icon: const Icon(Icons.lock_open_rounded, color: Colors.green),

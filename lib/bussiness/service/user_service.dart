@@ -142,6 +142,7 @@ class UserService {
     var retorno = await getCurrentUser();
     if (retorno != null) {
       if (retorno.indTipo == 1) {
+        if (retorno.usuarioResp?.motoristas?.isEmpty != false) return null;
         List<SolicitacaoMotorista> lista =
             await _userRepository.buscaSolicitacoesMotorista(
                 retorno.usuarioResp!.motoristas!.first.codMotorista!,
@@ -170,6 +171,7 @@ class UserService {
     } else {
       if (retorno != null) {
         if (retorno.indTipo == ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA) {
+          if (retorno.usuarioResp?.empresas?.isEmpty != false) return null;
           List<SolicitacaoMotorista> lista =
               await _userRepository.buscaSolicitacoesEmpresa(
                   retorno.usuarioResp!.empresas!.first.codEmpresa!,
@@ -194,7 +196,9 @@ class UserService {
       if (retorno.indTipo == 1) {
         List<SolicitacaoMotorista> lista =
             await _userRepository.buscaNovasSolicitacoesMotorista(
-          retorno.usuarioResp!.motoristas!.first.codMotorista ?? -1,
+          (retorno.usuarioResp?.motoristas?.isNotEmpty == true)
+              ? retorno.usuarioResp!.motoristas!.first.codMotorista ?? -1
+              : -1,
         );
         return lista;
       } else if (retorno.indTipo == 2) {
@@ -212,9 +216,9 @@ class UserService {
     await _userRepository.chamaPedidoDeSocorro(retorno!, latitude, longitude);
   }
 
-  Future<void> novaCorrida(SolicitacaoMotorista sol) async {
+  Future<int?> novaCorrida(SolicitacaoMotorista sol) async {
     var retorno = await getCurrentUser();
-    await _userRepository.chamaNovaCorrida(retorno!, sol);
+    return await _userRepository.chamaNovaCorrida(retorno!, sol);
   }
 
   Future<void> novoPedidoDeSocorroBlut() async {

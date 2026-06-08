@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
 import 'package:google_fonts/google_fonts.dart';
@@ -142,7 +142,7 @@ class _WaitingDriverScreenState extends State<WaitingDriverScreen>
   void dispose() {
     _rideSub?.cancel();
     _pulseCtrl.dispose();
-    _mapController?.dispose();
+    _mapController = null;
     super.dispose();
   }
 

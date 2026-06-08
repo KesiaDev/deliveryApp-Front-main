@@ -3,6 +3,8 @@ import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
+import 'package:delivery_front/core/theme_controller.dart';
+import 'package:delivery_front/core/app_session.dart';
 import 'theme_components.dart';
 import 'dart:convert';
 
@@ -26,7 +28,7 @@ class AppDrawer extends StatelessWidget {
     final fotoPerfil = currentUser?.usuarioResp?.motoristas?.first.desFotoPerfil;
 
     return Drawer(
-      backgroundColor: Colors.white,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       child: SafeArea(
         child: Column(
           children: [
@@ -82,18 +84,18 @@ class AppDrawer extends StatelessWidget {
                 children: [
                   Text(
                     nome,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: Colors.black87,
+                      color: Theme.of(context).colorScheme.onSurface,
                     ),
                   ),
                   const SizedBox(height: 4),
                   Text(
                     email,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 14,
-                      color: Colors.grey,
+                      color: Theme.of(context).colorScheme.onSurface.withOpacity(0.6),
                     ),
                   ),
                 ],
@@ -229,6 +231,35 @@ class AppDrawer extends StatelessWidget {
                       );
                     },
                   ),
+                  // Toggle tema claro/escuro
+                  ValueListenableBuilder<ThemeMode>(
+                    valueListenable: ThemeController.themeMode,
+                    builder: (context, mode, _) {
+                      final isDark = mode == ThemeMode.dark;
+                      return ListTile(
+                        contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 20, vertical: 4),
+                        leading: Icon(
+                          isDark ? Icons.light_mode : Icons.dark_mode,
+                          color: Theme.of(context).colorScheme.onSurface,
+                          size: 24,
+                        ),
+                        title: Text(
+                          isDark ? 'Modo Claro' : 'Modo Escuro',
+                          style: TextStyle(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w500,
+                            color: Theme.of(context).colorScheme.onSurface,
+                          ),
+                        ),
+                        trailing: Switch(
+                          value: isDark,
+                          activeColor: kPrimaryRed,
+                          onChanged: (_) => ThemeController.toggle(),
+                        ),
+                      );
+                    },
+                  ),
                 ],
               ),
             ),
@@ -240,11 +271,13 @@ class AppDrawer extends StatelessWidget {
               title: "Sair",
               subtitle: null,
               onTap: () {
+                // Salva root navigator ANTES do pop — drawer context desmonta após pop
+                final rootCtx = Navigator.of(context, rootNavigator: true).context;
                 Navigator.of(context).pop();
                 if (onLogout != null) {
                   onLogout!();
                 } else {
-                  _showLogoutDialog(context);
+                  _showLogoutDialog(rootCtx);
                 }
               },
             ),
@@ -262,29 +295,30 @@ class AppDrawer extends StatelessWidget {
     String? subtitle,
     required VoidCallback onTap,
   }) {
+    final textColor = Theme.of(context).colorScheme.onSurface;
     return ListTile(
       contentPadding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-      leading: Icon(icon, color: Colors.black87, size: 24),
+      leading: Icon(icon, color: textColor, size: 24),
       title: Text(
         title,
-        style: const TextStyle(
+        style: TextStyle(
           fontSize: 16,
           fontWeight: FontWeight.w500,
-          color: Colors.black87,
+          color: textColor,
         ),
       ),
       subtitle: subtitle != null
           ? Text(
               subtitle,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 12,
-                color: Colors.grey,
+                color: textColor.withOpacity(0.6),
               ),
             )
           : null,
-      trailing: const Icon(
+      trailing: Icon(
         Icons.chevron_right,
-        color: Colors.grey,
+        color: textColor.withOpacity(0.4),
         size: 20,
       ),
       onTap: onTap,
@@ -292,34 +326,7 @@ class AppDrawer extends StatelessWidget {
   }
 
   void _showLogoutDialog(BuildContext context) {
-    showDialog(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text("Confirmar"),
-        content: const Text("Deseja realmente sair?"),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(),
-            child: const Text("Cancelar"),
-          ),
-          TextButton(
-            onPressed: () async {
-              Navigator.of(context).pop();
-              if (userService != null) {
-                await userService!.logoffLocalDB();
-              }
-              if (context.mounted) {
-                Navigator.of(context).pushNamedAndRemoveUntil(
-                  AppRoutes.splash,
-                  (Route<dynamic> route) => false,
-                );
-              }
-            },
-            child: const Text("Sair"),
-          ),
-        ],
-      ),
-    );
+    AppSession.logoutComConfirmacao(context);
   }
 }
 

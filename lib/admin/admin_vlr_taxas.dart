@@ -19,6 +19,7 @@ class AdminVlrTaxasPage extends StatefulWidget {
 class _AdminVlrTaxasPage extends State<AdminVlrTaxasPage>
     with WidgetsBindingObserver {
   AdminService _adminService = AdminService();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -46,14 +47,13 @@ class _AdminVlrTaxasPage extends State<AdminVlrTaxasPage>
   }
 
   SafeArea montaTelaEmpresas(double width) {
-    final scaffoldKey = GlobalKey<ScaffoldState>();
     return SafeArea(
       child: Scaffold(
-        key: scaffoldKey,
+        key: _scaffoldKey,
         backgroundColor: AdminColors.background,
         appBar: AdminAppBar(
           title: 'Taxas',
-          scaffoldKey: scaffoldKey,
+          scaffoldKey: _scaffoldKey,
         ),
         floatingActionButton: FloatingActionButton.extended(
           onPressed: () => _showAddTaxaDialog(context),

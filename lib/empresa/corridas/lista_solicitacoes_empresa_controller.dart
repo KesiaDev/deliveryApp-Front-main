@@ -20,20 +20,13 @@ class ListaSolicitacoesEmpresaController extends ChangeNotifier {
     try {
       //DialogBuilder(context).showLoadingIndicator("");
       await Future.delayed(Duration(seconds: 1));
-      var result = null;
-      if (ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ==
-          indBuscaChamadosRaio) {
-        result = await _userService.fetchSolicitacoesEmpresa(
-            indBuscaChamadosRaio: indBuscaChamadosRaio, req: req);
-      } else {
-        result = await _userService.fetchSolicitacoesEmpresa(
-            indBuscaChamadosRaio: indBuscaChamadosRaio, req: req);
-      }
+      var result = await _userService.fetchSolicitacoesEmpresa(
+          indBuscaChamadosRaio: indBuscaChamadosRaio, req: req);
 
       if (result != null) {
         return result;
       } else {
-        LoginControler.showToast(context, "Não foram encontrados Solicitações");
+        LoginControler.showToast(context, "Nenhuma solicitação encontrada.");
         List<SolicitacaoMotorista> listResponse = [];
         return listResponse;
       }
@@ -64,7 +57,7 @@ class ListaSolicitacoesEmpresaController extends ChangeNotifier {
       if (result != null) {
         return result;
       } else {
-        LoginControler.showToast(context, "Não foram encontrados Solicitações");
+        LoginControler.showToast(context, "Nenhuma solicitação encontrada.");
         List<SolicitacaoMotorista> listResponse = [];
         return listResponse;
       }
@@ -100,20 +93,21 @@ class ListaSolicitacoesEmpresaController extends ChangeNotifier {
     }
   }
 
-  Future<void> aceitarCorrida(int numSeqChamado, int indStatusCorrida) async {
+  Future<bool> aceitarCorrida(int numSeqChamado, int indStatusCorrida) async {
     try {
       //DialogBuilder(context).showLoadingIndicator("");
       await Future.delayed(Duration(seconds: 1));
 
       await _userService.aceitarCorrida(numSeqChamado, indStatusCorrida);
-      
+
       // Envia mensagem automática no chat
       await ChatAutomaticMessages.sendStatusMessage(
         corridaId: numSeqChamado.toString(),
         indStatusCorrida: indStatusCorrida,
       );
-      
+
       notifyListeners();
+      return true;
     } on PlatformException catch (e) {
       if (e.message != null && e.message!.contains("outro motorista")) {
         _showMyDialog(
@@ -122,6 +116,11 @@ class ListaSolicitacoesEmpresaController extends ChangeNotifier {
         LoginControler.showToast(
             context, "Erro ao atualizar chamado tente novamente!");
       }
+      return false;
+    } catch (e) {
+      LoginControler.showToast(
+          context, "Erro ao aceitar corrida, tente novamente!");
+      return false;
     } finally {
       //DialogBuilder(context).hideOpenDialog();
     }
@@ -130,7 +129,8 @@ class ListaSolicitacoesEmpresaController extends ChangeNotifier {
   Future<void> _showMyDialog(String message) async {
     return showDialog<void>(
       context: context,
-      barrierDismissible: false, // user must tap button!
+      useRootNavigator: false,
+      barrierDismissible: false,
       builder: (BuildContext context) {
         return AlertDialog(
           title: const Text('Atenção'),
@@ -166,7 +166,7 @@ class ListaSolicitacoesEmpresaController extends ChangeNotifier {
       if (result != null) {
         return result;
       } else {
-        LoginControler.showToast(context, "Não foram encontrados Solicitações");
+        LoginControler.showToast(context, "Nenhuma solicitação encontrada.");
         List<DadosCorridas> listResponse = [];
         return listResponse;
       }

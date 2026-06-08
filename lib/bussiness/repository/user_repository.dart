@@ -19,6 +19,7 @@ import 'package:delivery_front/shared/models/motorista/models/motoristas_proximo
 import 'package:delivery_front/shared/models/motorista/motorista_cem.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:dio/dio.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
 class UserRepository {
@@ -26,24 +27,12 @@ class UserRepository {
 
   Future<Usuario> autenticaUser(
       String? email, String? senha, LoginRequest login) async {
-    print('🟢 [LOGIN] ===== INÍCIO DO LOGIN =====');
-    print('🟢 [LOGIN] Email recebido: "${login.email}"');
-    print('🟢 [LOGIN] Email length: ${login.email.length}');
-    print('🟢 [LOGIN] Email tem espaços? ${login.email.contains(" ")}');
-    print('🟢 [LOGIN] Senha length: ${login.senha.length}');
     final jsonToSend = login.toJson();
     final baseUrl = _dio.options.baseUrl;
     final fullUrl = baseUrl.endsWith('/') ? '${baseUrl}public/login' : '$baseUrl/public/login';
-    
-    print('🟢 [LOGIN] ========== REQUEST DEBUG ==========');
-    print('🟢 [LOGIN] URL FINAL: $fullUrl');
-    print('🟢 [LOGIN] Método: POST');
-    print('🟢 [LOGIN] Headers: Content-Type=application/json');
-    print('🟢 [LOGIN] Body (username): "${jsonToSend["username"]}"');
-    print('🟢 [LOGIN] Body (password): *** (${jsonToSend["password"]?.toString().length ?? 0} chars)');
-    print('🟢 [LOGIN] Body (desTokenFcm): ${jsonToSend["desTokenFcm"] != null ? "presente" : "null"}');
-    print('🟢 [LOGIN] Timeout: connect=30s, send=90s, receive=90s');
-    print('🟢 [LOGIN] ====================================');
+    if (kDebugMode) {
+      debugPrint('🟢 [LOGIN] URL: $fullUrl | FCM: ${jsonToSend["desTokenFcm"] != null ? "presente" : "null"}');
+    }
     
     try {
       // URL completa para garantir /v1 (Dio resolve path relativo e remove /v1 do baseUrl)
@@ -56,9 +45,7 @@ class UserRepository {
         ),
       );
       
-      print('🟢 [LOGIN] ✅ Resposta recebida! Status: ${response.statusCode}');
-      print('🟢 [LOGIN] Response.data tipo: ${response.data.runtimeType}');
-      print('🟢 [LOGIN] Response.data é null? ${response.data == null}');
+      if (kDebugMode) debugPrint('🟢 [LOGIN] Status: ${response.statusCode}');
 
       // Verifica se response.data é válido
       if (response.data == null) {
@@ -70,33 +57,32 @@ class UserRepository {
       // Tenta fazer o parse do JSON
       Usuario usuario;
       try {
-        // PRINT DIRETO PARA LOGCAT - sempre aparece
-        print('🔵 [LOGIN] Iniciando parse da resposta. Tipo: ${response.data.runtimeType}');
+        if (kDebugMode) debugPrint('🔵 [LOGIN] Iniciando parse. Tipo: ${response.data.runtimeType}');
         
         // Normaliza o response.data para Map<String, dynamic>
         Map<String, dynamic> jsonData;
         if (response.data is Map<String, dynamic>) {
           jsonData = response.data as Map<String, dynamic>;
-          print('🔵 [LOGIN] response.data é Map<String, dynamic>');
+          if (kDebugMode) debugPrint('🔵 [LOGIN] response.data é Map<String, dynamic>');
         } else if (response.data is Map) {
           jsonData = Map<String, dynamic>.from(response.data as Map);
-          print('🔵 [LOGIN] response.data é Map (convertido)');
+          if (kDebugMode) debugPrint('🔵 [LOGIN] response.data é Map (convertido)');
         } else if (response.data is String) {
           try {
             jsonData = json.decode(response.data as String) as Map<String, dynamic>;
-            print('🔵 [LOGIN] response.data é String (decodificado)');
+            if (kDebugMode) debugPrint('🔵 [LOGIN] response.data é String (decodificado)');
           } catch (e) {
-            print('🔴 [LOGIN] ERRO ao decodificar JSON string: $e');
+            if (kDebugMode) debugPrint('🔴 [LOGIN] ERRO ao decodificar JSON string: $e');
             throw Exception('Erro ao decodificar JSON string: $e');
           }
         } else {
-          print('🔴 [LOGIN] Formato inválido: ${response.data.runtimeType}');
+          if (kDebugMode) debugPrint('🔴 [LOGIN] Formato inválido: ${response.data.runtimeType}');
           throw Exception('Formato de resposta inválido: ${response.data.runtimeType}');
         }
         
         // PRINT das chaves do JSON
-        print('🔵 [LOGIN] Chaves do JSON: ${jsonData.keys.toList()}');
-        print('🔵 [LOGIN] Tem jwt: ${jsonData.containsKey('jwt')}, Tem tipPerfil: ${jsonData.containsKey('tipPerfil')}, Tem codUsuario: ${jsonData.containsKey('codUsuario')}');
+        if (kDebugMode) debugPrint('🔵 [LOGIN] Chaves do JSON: ${jsonData.keys.toList()}');
+        if (kDebugMode) debugPrint('🔵 [LOGIN] Tem jwt: ${jsonData.containsKey('jwt')}, Tem tipPerfil: ${jsonData.containsKey('tipPerfil')}, Tem codUsuario: ${jsonData.containsKey('codUsuario')}');
         
         // Log da estrutura recebida para debug
         Logger.logInfo(
@@ -111,25 +97,25 @@ class UserRepository {
           tag: 'UserRepository.autenticaUser.parse',
         );
         
-        print('🔵 [LOGIN] Chamando Usuario.fromJson...');
+        if (kDebugMode) debugPrint('🔵 [LOGIN] Chamando Usuario.fromJson...');
         usuario = Usuario.fromJson(jsonData);
-        print('✅ [LOGIN] Usuario.fromJson concluído com sucesso');
+        if (kDebugMode) debugPrint('✅ [LOGIN] Usuario.fromJson concluído com sucesso');
       } catch (parseError, parseStackTrace) {
         // PRINT DIRETO DO ERRO - sempre aparece no Logcat
-        print('🔴 [LOGIN] ERRO NO PARSE!');
-        print('🔴 [LOGIN] Tipo do erro: ${parseError.runtimeType}');
-        print('🔴 [LOGIN] Mensagem: ${parseError.toString()}');
-        print('🔴 [LOGIN] Tipo do response.data: ${response.data.runtimeType}');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] ERRO NO PARSE!');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Tipo do erro: ${parseError.runtimeType}');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Mensagem: ${parseError.toString()}');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Tipo do response.data: ${response.data.runtimeType}');
         
         // Tenta mostrar preview dos dados
         try {
           if (response.data != null) {
             final dataStr = response.data.toString();
             final preview = dataStr.length > 300 ? dataStr.substring(0, 300) + '...' : dataStr;
-            print('🔴 [LOGIN] Preview dos dados: $preview');
+            if (kDebugMode) debugPrint('🔴 [LOGIN] Preview dos dados: $preview');
           }
         } catch (e) {
-          print('🔴 [LOGIN] Não foi possível mostrar preview dos dados');
+          if (kDebugMode) debugPrint('🔴 [LOGIN] Não foi possível mostrar preview dos dados');
         }
         
         // Log mais detalhado do erro
@@ -168,7 +154,7 @@ class UserRepository {
           errorMessage = 'Formato de dados inválido recebido do servidor.';
         }
         
-        print('🔴 [LOGIN] Lançando ApiException com mensagem: $errorMessage');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Lançando ApiException com mensagem: $errorMessage');
         throw ApiException(
           message: errorMessage,
           originalError: parseError,
@@ -177,11 +163,11 @@ class UserRepository {
       
       // Verifica se o login foi bem-sucedido
       // Para login, se temos JWT e status 200, consideramos sucesso mesmo se indSucesso for 0
-      print('🟢 [LOGIN] Verificando resultado do login...');
-      print('🟢 [LOGIN] indSucesso: ${usuario.indSucesso}');
-      print('🟢 [LOGIN] jwt: ${usuario.jwt != null ? "presente" : "ausente"}');
-      print('🟢 [LOGIN] codUsuario: ${usuario.codUsuario}');
-      print('🟢 [LOGIN] tipPerfil: ${usuario.indTipo}');
+      if (kDebugMode) debugPrint('🟢 [LOGIN] Verificando resultado do login...');
+      if (kDebugMode) debugPrint('🟢 [LOGIN] indSucesso: ${usuario.indSucesso}');
+      if (kDebugMode) debugPrint('🟢 [LOGIN] jwt: ${usuario.jwt != null ? "presente" : "ausente"}');
+      if (kDebugMode) debugPrint('🟢 [LOGIN] codUsuario: ${usuario.codUsuario}');
+      if (kDebugMode) debugPrint('🟢 [LOGIN] tipPerfil: ${usuario.indTipo}');
       
       // Se temos JWT e codUsuario, o login foi bem-sucedido (status 200 já confirma isso)
       // Apenas verifica indSucesso se não tivermos JWT
@@ -189,8 +175,8 @@ class UserRepository {
         // Sem JWT, verifica indSucesso
         if (usuario.indSucesso != null && usuario.indSucesso == 0) {
           String errorMsg = usuario.desMsgErro ?? 'E-mail ou senha inválidos. Verifique suas credenciais.';
-          print('🔴 [LOGIN] Login falhou: Sem JWT e indSucesso = 0');
-          print('🔴 [LOGIN] Mensagem de erro: $errorMsg');
+          if (kDebugMode) debugPrint('🔴 [LOGIN] Login falhou: Sem JWT e indSucesso = 0');
+          if (kDebugMode) debugPrint('🔴 [LOGIN] Mensagem de erro: $errorMsg');
           Logger.logWarn(
             'Login falhou: indSucesso = 0 e sem JWT',
             meta: {'email': login.email, 'indSucesso': usuario.indSucesso, 'desMsgErro': usuario.desMsgErro},
@@ -203,13 +189,13 @@ class UserRepository {
         }
       } else {
         // Temos JWT, login foi bem-sucedido
-        print('✅ [LOGIN] Login bem-sucedido! JWT presente.');
+        if (kDebugMode) debugPrint('✅ [LOGIN] Login bem-sucedido! JWT presente.');
       }
 
       // BUG-007 fix: bloqueia acesso se usuário está bloqueado, mesmo que JWT tenha sido emitido
       final bloqueadoResp = usuario.usuarioResp?.indBloqueado ?? usuario.indBloqueado;
       if (bloqueadoResp == 1) {
-        print('🔴 [LOGIN] Usuário bloqueado (indBloqueado=1). Acesso negado.');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Usuário bloqueado (indBloqueado=1). Acesso negado.');
         throw ApiException(
           message: 'Sua conta está bloqueada. Entre em contato com o suporte.',
           statusCode: 403,
@@ -229,33 +215,33 @@ class UserRepository {
 
       return usuario;
     } on ApiException catch (e) {
-      print('🔴 [LOGIN] ApiException capturada: ${e.message}');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] ApiException capturada: ${e.message}');
       rethrow;
     } on DioException catch (e) {
-      print('🔴 [LOGIN] DioException capturada!');
-      print('🔴 [LOGIN] Tipo: ${e.type}');
-      print('🔴 [LOGIN] Mensagem: ${e.message}');
-      print('🔴 [LOGIN] Status Code: ${e.response?.statusCode}');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] DioException capturada!');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] Tipo: ${e.type}');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] Mensagem: ${e.message}');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] Status Code: ${e.response?.statusCode}');
       
       // Extrai mensagem da resposta da API se disponível
       String? apiErrorMessage;
       if (e.response != null && e.response?.data != null) {
-        print('🔴 [LOGIN] Response data: ${e.response?.data}');
-        print('🔴 [LOGIN] Response data tipo: ${e.response?.data.runtimeType}');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Response data: ${e.response?.data}');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Response data tipo: ${e.response?.data.runtimeType}');
         
         // Tenta extrair mensagem de erro da API
         if (e.response?.data is String) {
           apiErrorMessage = e.response?.data as String;
           // Remove aspas e espaços extras
           apiErrorMessage = apiErrorMessage.trim().replaceAll('"', '').replaceAll("'", '');
-          print('🔴 [LOGIN] Mensagem extraída (String): $apiErrorMessage');
+          if (kDebugMode) debugPrint('🔴 [LOGIN] Mensagem extraída (String): $apiErrorMessage');
         } else if (e.response?.data is Map) {
           final data = e.response?.data as Map;
           apiErrorMessage = data['message'] as String? ?? 
                            data['mensagem'] as String? ?? 
                            data['error'] as String? ??
                            data['msg'] as String?;
-          print('🔴 [LOGIN] Mensagem extraída (Map): $apiErrorMessage');
+          if (kDebugMode) debugPrint('🔴 [LOGIN] Mensagem extraída (Map): $apiErrorMessage');
         }
       }
       
@@ -273,7 +259,7 @@ class UserRepository {
       // Se for 401, usa a mensagem da API se disponível, senão usa mensagem padrão
       if (e.response?.statusCode == 401) {
         final finalMessage = apiErrorMessage ?? 'E-mail ou senha inválidos. Verifique suas credenciais.';
-        print('🔴 [LOGIN] Lançando ApiException 401 com mensagem: $finalMessage');
+        if (kDebugMode) debugPrint('🔴 [LOGIN] Lançando ApiException 401 com mensagem: $finalMessage');
         throw ApiException(
           message: finalMessage,
           statusCode: 401,
@@ -284,9 +270,9 @@ class UserRepository {
       
       throw ApiException.fromDioError(e);
     } catch (e, stackTrace) {
-      print('🔴 [LOGIN] Erro genérico capturado!');
-      print('🔴 [LOGIN] Tipo: ${e.runtimeType}');
-      print('🔴 [LOGIN] Mensagem: ${e.toString()}');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] Erro genérico capturado!');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] Tipo: ${e.runtimeType}');
+      if (kDebugMode) debugPrint('🔴 [LOGIN] Mensagem: ${e.toString()}');
       
       Logger.logError(
         e,
@@ -463,12 +449,14 @@ class UserRepository {
     // ignore: deprecated_member_use
   }
 
-  Future<void> chamaNovaCorrida(
+  Future<int?> chamaNovaCorrida(
       Usuario motorista, SolicitacaoMotorista sol) async {
     _dio.options.headers["Authorization"] =
         "Bearer ${ApiBaseHelper.userSessao!.jwt}";
 
-    sol.codEmpresa = motorista.usuarioResp!.empresas!.first.codEmpresa;
+    sol.codEmpresa = (motorista.usuarioResp?.empresas?.isNotEmpty == true)
+        ? motorista.usuarioResp!.empresas!.first.codEmpresa
+        : null;
 
     DbEmpresasByCodEmpresa emp =
         DbEmpresasByCodEmpresa(codEmpresa: sol.codEmpresa);
@@ -477,7 +465,13 @@ class UserRepository {
 
     final response =
         await _dio.post("/private/corridas/create", data: sol.toJson());
-    // ignore: deprecated_member_use
+    try {
+      final data = response.data;
+      if (data is Map) {
+        return (data['numSeq'] ?? data['num_seq'] ?? data['id']) as int?;
+      }
+    } catch (_) {}
+    return null;
   }
 
   Future<void> logoff(int codUsuario) async {
@@ -485,7 +479,7 @@ class UserRepository {
       final response =
           await _dio.post("/api/logoff", data: {"codUsuario": codUsuario});
     } on Exception catch (e) {
-      print("erro");
+      if (kDebugMode) debugPrint("erro");
     }
     // ignore: deprecated_member_use
   }
@@ -561,15 +555,15 @@ class UserRepository {
       final baseUrl = _dio.options.baseUrl;
       final fullUrl = baseUrl.endsWith('/') ? '${baseUrl}public/criarUsuario' : '$baseUrl/public/criarUsuario';
       
-      print('🟢 [CADASTRO] ========== REQUEST DEBUG ==========');
-      print('🟢 [CADASTRO] URL FINAL: $fullUrl');
-      print('🟢 [CADASTRO] Método: POST');
-      print('🟢 [CADASTRO] Headers: Content-Type=application/json');
-      print('🟢 [CADASTRO] Body (usuario): ${jsonToSend?["usuario"]}');
-      print('🟢 [CADASTRO] Body (desNome): ${jsonToSend?["desNome"]}');
-      print('🟢 [CADASTRO] Body (senha): ${jsonToSend?["senha"] != null ? "***" : "null"}');
-      print('🟢 [CADASTRO] Timeout: connect=30s, send=30s, receive=30s');
-      print('🟢 [CADASTRO] ====================================');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] ========== REQUEST DEBUG ==========');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] URL FINAL: $fullUrl');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Método: POST');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Headers: Content-Type=application/json');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Body (usuario): ${jsonToSend?["usuario"]}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Body (desNome): ${jsonToSend?["desNome"]}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Body (senha): ${jsonToSend?["senha"] != null ? "***" : "null"}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Timeout: connect=30s, send=30s, receive=30s');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] ====================================');
       
       // Idempotency key baseado no email para evitar registros duplicados em retries
       final email = userInsert?.usuario ?? '';
@@ -586,8 +580,8 @@ class UserRepository {
         ),
       );
       
-      print('🟢 [CADASTRO] Resposta recebida! Status: ${response.statusCode}');
-      print('🟢 [CADASTRO] Response.data tipo: ${response.data.runtimeType}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Resposta recebida! Status: ${response.statusCode}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Response.data tipo: ${response.data.runtimeType}');
       
       var retorno;
       
@@ -601,37 +595,37 @@ class UserRepository {
         try {
           jsonData = json.decode(response.data as String) as Map<String, dynamic>;
         } catch (e) {
-          print('🔴 [CADASTRO] Erro ao decodificar JSON string: $e');
+          if (kDebugMode) debugPrint('🔴 [CADASTRO] Erro ao decodificar JSON string: $e');
           throw Exception('Erro ao processar resposta do servidor: formato inválido');
         }
       } else {
         throw Exception('Formato de resposta inválido: ${response.data.runtimeType}');
       }
       
-      print('🟢 [CADASTRO] Fazendo parse do JSON...');
-      print('🟢 [CADASTRO] JSON completo recebido: ${json.encode(jsonData)}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Fazendo parse do JSON...');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] JSON completo recebido: ${json.encode(jsonData)}');
       retorno = Usuario.fromJson(jsonData);
       
-      print('🟢 [CADASTRO] Parse concluído!');
-      print('🟢 [CADASTRO] indSucesso: ${retorno.indSucesso}');
-      print('🟢 [CADASTRO] desMsgErro: ${retorno.desMsgErro}');
-      print('🟢 [CADASTRO] codUsuario: ${retorno.codUsuario}');
-      print('🟢 [CADASTRO] desNome: ${retorno.desNome}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] Parse concluído!');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] indSucesso: ${retorno.indSucesso}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] desMsgErro: ${retorno.desMsgErro}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] codUsuario: ${retorno.codUsuario}');
+      if (kDebugMode) debugPrint('🟢 [CADASTRO] desNome: ${retorno.desNome}');
       
       // BUG-001 fix: backend pode omitir indSucesso; se temos codUsuario, é sucesso
       final bool isSuccess = retorno.codUsuario != null || (retorno.indSucesso != null && retorno.indSucesso != 0);
       if (!isSuccess) {
         String message = retorno.desMsgErro ?? 'Erro ao efetuar cadastro';
-        print('🔴 [CADASTRO] Cadastro falhou: $message');
-        print('🔴 [CADASTRO] Mensagem de erro da API: ${retorno.desMsgErro ?? "Não informada"}');
-        print('🔴 [CADASTRO] Dados enviados:');
-        print('   - Email: ${email}');
-        print('   - Nome: ${userInsert?.desNome ?? "N/A"}');
-        print('   - CPF: ${userInsert?.usuarioResp?.motoristas?.first.desCpfCnpj ?? "N/A"}');
-        print('   - Placa: ${userInsert?.usuarioResp?.motoristas?.first.desPlaca ?? "N/A"}');
-        print('   - Tipo Moto: ${userInsert?.usuarioResp?.motoristas?.first.desTipoMoto ?? "N/A"}');
-        print('   - CNH anexada: ${userInsert?.usuarioResp?.motoristas?.first.desCarteira != null && userInsert!.usuarioResp!.motoristas!.first.desCarteira!.isNotEmpty}');
-        print('   - Endereço completo: ${userInsert?.usuarioResp?.motoristas?.first.enderecos?.isNotEmpty ?? false}');
+        if (kDebugMode) debugPrint('🔴 [CADASTRO] Cadastro falhou: $message');
+        if (kDebugMode) debugPrint('🔴 [CADASTRO] Mensagem de erro da API: ${retorno.desMsgErro ?? "Não informada"}');
+        if (kDebugMode) debugPrint('🔴 [CADASTRO] Dados enviados:');
+        if (kDebugMode) debugPrint('   - Email: ${email}');
+        if (kDebugMode) debugPrint('   - Nome: ${userInsert?.desNome ?? "N/A"}');
+        if (kDebugMode) debugPrint('   - CPF: ${userInsert?.usuarioResp?.motoristas?.first.desCpfCnpj ?? "N/A"}');
+        if (kDebugMode) debugPrint('   - Placa: ${userInsert?.usuarioResp?.motoristas?.first.desPlaca ?? "N/A"}');
+        if (kDebugMode) debugPrint('   - Tipo Moto: ${userInsert?.usuarioResp?.motoristas?.first.desTipoMoto ?? "N/A"}');
+        if (kDebugMode) debugPrint('   - CNH anexada: ${userInsert?.usuarioResp?.motoristas?.first.desCarteira != null && userInsert!.usuarioResp!.motoristas!.first.desCarteira!.isNotEmpty}');
+        if (kDebugMode) debugPrint('   - Endereço completo: ${userInsert?.usuarioResp?.motoristas?.first.enderecos?.isNotEmpty ?? false}');
         
         // Melhora a mensagem de erro se for genérica
         if (message == 'Erro ao efetuar cadastro' || message.isEmpty) {
@@ -641,13 +635,13 @@ class UserRepository {
         throw new CustomException(message: message);
       }
       
-      print('✅ [CADASTRO] Cadastro realizado com sucesso!');
+      if (kDebugMode) debugPrint('✅ [CADASTRO] Cadastro realizado com sucesso!');
       return retorno;
     } on DioException catch (e) {
-      print('🔴 [CADASTRO] DioException capturada!');
-      print('🔴 [CADASTRO] Tipo: ${e.type}');
-      print('🔴 [CADASTRO] Status Code: ${e.response?.statusCode}');
-      print('🔴 [CADASTRO] Response data: ${e.response?.data}');
+      if (kDebugMode) debugPrint('🔴 [CADASTRO] DioException capturada!');
+      if (kDebugMode) debugPrint('🔴 [CADASTRO] Tipo: ${e.type}');
+      if (kDebugMode) debugPrint('🔴 [CADASTRO] Status Code: ${e.response?.statusCode}');
+      if (kDebugMode) debugPrint('🔴 [CADASTRO] Response data: ${e.response?.data}');
       
       Logger.logError(
         e,
@@ -656,7 +650,7 @@ class UserRepository {
       );
       throw ApiException.fromDioError(e);
     } catch (e, stackTrace) {
-      print('🔴 [CADASTRO] Erro genérico: ${e.toString()}');
+      if (kDebugMode) debugPrint('🔴 [CADASTRO] Erro genérico: ${e.toString()}');
       Logger.logError(
         e,
         stackTrace: stackTrace,
@@ -824,8 +818,11 @@ class UserRepository {
     Usuario? user = ApiBaseHelper.userSessao;
     _dio.options.headers["Authorization"] =
         "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+    final codMot = (user!.usuarioResp?.motoristas?.isNotEmpty == true)
+        ? user.usuarioResp!.motoristas!.first.codMotorista
+        : null;
     final response = await _dio.post(
-        "/private/corridas/motorista/${user!.usuarioResp!.motoristas!.first.codMotorista}/corrida/${numSeqChamado}/${indStatusCorrida}");
+        "/private/corridas/motorista/${codMot}/corrida/${numSeqChamado}/${indStatusCorrida}");
     // ignore: deprecated_member_use
     if (response.data != null &&
         response.data.toString().contains("outro motorista")) {

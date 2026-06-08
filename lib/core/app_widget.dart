@@ -31,6 +31,7 @@ import 'package:delivery_front/modules/chat/screens/chat_list_screen.dart';
 import 'package:delivery_front/modules/rating/screens/rating_screen.dart';
 import 'package:delivery_front/modules/rating/screens/rating_history_screen.dart' show RatingHistoryScreen;
 import 'package:delivery_front/modules/tracking/screens/live_tracking_screen.dart';
+import 'package:delivery_front/modules/navigation/screens/motorista_navigation_screen.dart';
 import 'package:delivery_front/modules/payments/screens/payment_method_selection_screen.dart';
 import 'package:delivery_front/modules/payments/screens/payment_review_screen.dart';
 import 'package:delivery_front/modules/payments/models/payment_model.dart';
@@ -39,7 +40,11 @@ import 'package:delivery_front/services/advanced_notification_service.dart';
 import 'package:delivery_front/seguranca/recuperacao_senha_page.dart';
 import 'package:delivery_front/seguranca/alteracao_senha_page.dart';
 import 'package:delivery_front/seguranca/biometric_settings_page.dart';
+import 'package:delivery_front/modules/payments/screens/carteira_fool_screen.dart';
+import 'package:delivery_front/modules/payments/screens/weekly_invoices_screen.dart';
+import 'package:delivery_front/modules/cod/screens/pendencias_motorista_screen.dart';
 import 'package:flutter/material.dart';
+import 'package:delivery_front/core/theme_controller.dart';
 import 'package:flutter_localizations/flutter_localizations.dart';
 
 class AppWidget extends StatelessWidget {
@@ -70,6 +75,17 @@ class AppWidget extends StatelessWidget {
         bodyColor: Colors.black,
         decorationColor: Colors.black,
         displayColor: Colors.white,
+      ),
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16))),
+        backgroundColor: const Color(0xFF1C1C1E),
+        contentTextStyle:
+            const TextStyle(fontSize: 14, color: Colors.white, height: 1.4),
+        elevation: 10,
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
       ),
     );
   }
@@ -117,6 +133,17 @@ class AppWidget extends StatelessWidget {
         ),
       ),
       dividerColor: Colors.white12,
+      snackBarTheme: SnackBarThemeData(
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.all(Radius.circular(16))),
+        backgroundColor: const Color(0xFF2C2C2E),
+        contentTextStyle:
+            const TextStyle(fontSize: 14, color: Colors.white, height: 1.4),
+        elevation: 10,
+        insetPadding:
+            const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+      ),
     );
   }
 
@@ -217,6 +244,24 @@ class AppWidget extends StatelessWidget {
           builder: (_) => RatingHistoryScreen(userId: userId!),
         );
       }
+      case AppRoutes.motoristaNavigation: {
+        final args = settings.arguments as Map<String, dynamic>?;
+        final corridaId = args?['corridaId'] as String? ?? '';
+        final destLat = args?['destinationLat'] as double? ?? 0.0;
+        final destLng = args?['destinationLng'] as double? ?? 0.0;
+        final destTitle = args?['destinationTitle'] as String? ?? 'Destino';
+        final destType = args?['destinationType'] as String? ?? 'delivery';
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => MotoristaNavigationScreen(
+            corridaId: corridaId,
+            destinationLat: destLat,
+            destinationLng: destLng,
+            destinationTitle: destTitle,
+            destinationType: destType,
+          ),
+        );
+      }
       case AppRoutes.liveTracking: {
         final args = settings.arguments as Map<String, dynamic>?;
         final corridaId = args?['corridaId'] as String?;
@@ -234,6 +279,14 @@ class AppWidget extends StatelessWidget {
             trackedUserId: args?['trackedUserId'] as String? ?? '',
             initialLatitude: args?['initialLatitude'] as double? ?? 0.0,
             initialLongitude: args?['initialLongitude'] as double? ?? 0.0,
+            pickupLat: args?['pickupLat'] as double?,
+            pickupLng: args?['pickupLng'] as double?,
+            pickupLabel: args?['pickupLabel'] as String?,
+            deliveryLat: args?['deliveryLat'] as double?,
+            deliveryLng: args?['deliveryLng'] as double?,
+            deliveryLabel: args?['deliveryLabel'] as String?,
+            motoristaName: args?['motoristaName'] as String?,
+            statusCorrida: args?['statusCorrida'] as int?,
           ),
         );
       }
@@ -346,6 +399,35 @@ class AppWidget extends StatelessWidget {
             userInfo: args?['userInfo'],
           ),
         );
+      case AppRoutes.carteiraFool: {
+        final args = settings.arguments as Map<String, dynamic>?;
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => CarteiraFoolScreen(
+            codEmpresa: args?['codEmpresa'] as int? ?? 0,
+            empresaName: args?['empresaName'] as String? ?? 'Empresa',
+          ),
+        );
+      }
+      case AppRoutes.boletosSemanais: {
+        final args = settings.arguments as Map<String, dynamic>?;
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => WeeklyInvoicesScreen(
+            codEmpresa: args?['codEmpresa'] as int?,
+            isAdmin: args?['isAdmin'] as bool? ?? false,
+          ),
+        );
+      }
+      case AppRoutes.pendenciasMotorista: {
+        final args = settings.arguments as Map<String, dynamic>?;
+        return MaterialPageRoute(
+          settings: settings,
+          builder: (_) => PendenciasMotoristaScreen(
+            codMotorista: args?['codMotorista'] as int? ?? 0,
+          ),
+        );
+      }
       default:
         // Rota não encontrada - redirecionar para splash
         return MaterialPageRoute(
@@ -362,13 +444,17 @@ class AppWidget extends StatelessWidget {
       AdvancedNotificationService.initialize(context);
     });
 
-    return MaterialApp(
+    return ValueListenableBuilder<ThemeMode>(
+      valueListenable: ThemeController.themeMode,
+      builder: (context, themeMode, _) => MaterialApp(
       navigatorKey: AdvancedNotificationService.navigatorKey,
       title: 'Fool Delivery',
       debugShowCheckedModeBanner: false,
       theme: _buildTheme(),
       darkTheme: _buildDarkTheme(),
-      themeMode: ThemeMode.system,
+      themeMode: themeMode,
+      // Evita frame preto durante transições de rota
+      color: const Color(0xFFFFFFFF),
       localizationsDelegates: const [
         GlobalMaterialLocalizations.delegate,
         GlobalWidgetsLocalizations.delegate,
@@ -475,6 +561,7 @@ class AppWidget extends StatelessWidget {
         // para permitir argumentos dinâmicos
       },
       onGenerateRoute: _generateRoute,
+      ),
     );
   }
 }

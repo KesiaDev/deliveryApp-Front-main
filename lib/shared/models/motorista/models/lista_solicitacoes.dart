@@ -41,6 +41,17 @@ class SolicitacaoMotorista {
   String? desTelefone;
   List<DestinoCorrida>? destinos; // Lista de destinos para corridas com múltiplos destinos
 
+  // ── Cobrança na Entrega (Cash on Delivery) ────────────────────────
+  // Campos opcionais — null = corrida normal sem cobrança ao cliente
+  /// Indica que é uma corrida com cobrança ao cliente final (0=não, 1=sim)
+  int? indCobrancaEntrega;
+  /// Valor que o motorista deve cobrar do cliente final
+  double? vlrCobrancaCliente;
+  /// Motorista levará maquininha para aceitar cartão (0=não, 1=sim)
+  int? indMaquininha;
+
+  bool get isCod => indCobrancaEntrega == 1 && (vlrCobrancaCliente ?? 0) > 0;
+
   SolicitacaoMotorista({
     this.numSeq,
     this.codEmpresa,
@@ -71,6 +82,9 @@ class SolicitacaoMotorista {
     this.indTipoCorrida,
     this.desTelefone,
     this.destinos,
+    this.indCobrancaEntrega,
+    this.vlrCobrancaCliente,
+    this.indMaquininha,
   });
 
   List<SolicitacaoMotorista> solicitacaoMotoristaFromJson(String str) =>
@@ -148,6 +162,12 @@ class SolicitacaoMotorista {
     vlrKmRodado = json['vlrKmRodado'];
     indTipoCorrida = json['indTipoCorrida'];
     distance = json['distance'];
+    // CoD — nullable, retrocompatível com API sem esses campos
+    indCobrancaEntrega = json['indCobrancaEntrega'];
+    vlrCobrancaCliente = json['vlrCobrancaCliente'] != null
+        ? (json['vlrCobrancaCliente'] as num).toDouble()
+        : null;
+    indMaquininha = json['indMaquininha'];
     if (json['dbLocalizacoesUsuariosByNumSeq'] != null) {
       dbLocalizacoesUsuariosByNumSeq = <DbLocalizacoesUsuariosByNumSeq>[];
       json['dbLocalizacoesUsuariosByNumSeq'].forEach((v) {
@@ -184,6 +204,10 @@ class SolicitacaoMotorista {
     data['desComplemento'] = this.desComplemento;
     data['indTipoCorrida'] = this.indTipoCorrida;
     data['desTelefone'] = this.desTelefone;
+    // CoD
+    if (this.indCobrancaEntrega != null) data['indCobrancaEntrega'] = this.indCobrancaEntrega;
+    if (this.vlrCobrancaCliente != null) data['vlrCobrancaCliente'] = this.vlrCobrancaCliente;
+    if (this.indMaquininha != null) data['indMaquininha'] = this.indMaquininha;
     if (this.destinos != null) {
       data['destinos'] = this.destinos!.map((v) => v.toJson()).toList();
     }

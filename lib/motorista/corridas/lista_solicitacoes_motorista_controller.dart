@@ -17,27 +17,23 @@ class ListaSolicitacoesMotoristaController extends ChangeNotifier {
   Future<List<SolicitacaoMotorista>> buscaListaSolicitacoes(
       {int indBuscaChamadosRaio = -1, bool isAdm = false}) async {
     try {
-      //DialogBuilder(context).showLoadingIndicator("");
-      await Future.delayed(Duration(seconds: 1));
       var result = null;
       if (isAdm) {
         result = await _userService.fetchSolicitacoesEmpresa(
             indBuscaChamadosRaio: indBuscaChamadosRaio, isAdm: isAdm);
       } else {
-        if (ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ==
-            indBuscaChamadosRaio) {
-          result = await _userService.fetchNovasCorridasMotorista(
-              indBuscaChamadosRaio: indBuscaChamadosRaio, isAdm: isAdm);
-        } else {
-          result = await _userService.fetchSolicitacoesMotorista(
-              indBuscaChamadosRaio: indBuscaChamadosRaio, isAdm: isAdm);
-        }
+        // Sempre usa o endpoint que funciona: /corridas/motorista/{id}/{status}
+        // O endpoint /corridas/usuario/{id} (BUG-004) não retorna corridas disponíveis
+        result = await _userService.fetchSolicitacoesMotorista(
+            indBuscaChamadosRaio: indBuscaChamadosRaio, isAdm: isAdm);
       }
 
       if (result != null) {
-        return result;
+        // Deduplication by numSeq to prevent duplicate entries
+        final seen = <int>{};
+        return result.where((s) => seen.add(s.numSeq ?? -1)).toList();
       } else {
-        LoginControler.showToast(context, "Não foram encontrados Solicitações");
+        LoginControler.showToast(context, "Nenhuma solicitação encontrada.");
         List<SolicitacaoMotorista> listResponse = [];
         return listResponse;
       }
@@ -53,8 +49,6 @@ class ListaSolicitacoesMotoristaController extends ChangeNotifier {
 
   Future<void> finalizarChamado(int numSeqChamado, int indStatusCorrida, {String? motivoCancelamento}) async {
     try {
-      //DialogBuilder(context).showLoadingIndicator("");
-      await Future.delayed(Duration(seconds: 1));
 
       await _userService.finalizarChamado(numSeqChamado, indStatusCorrida, motivoCancelamento: motivoCancelamento);
       
@@ -86,8 +80,18 @@ class ListaSolicitacoesMotoristaController extends ChangeNotifier {
 
   Future<bool> aceitarCorrida(int numSeqChamado, int indStatusCorrida) async {
     try {
-      //DialogBuilder(context).showLoadingIndicator("");
-      await Future.delayed(Duration(seconds: 1));
+      // Block acceptance if driver already has an active delivery
+      final activasResult = await _userService.fetchSolicitacoesMotorista(
+        indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO,
+      );
+      final aceitasResult = await _userService.fetchSolicitacoesMotorista(
+        indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA,
+      );
+      final totalAtivas = (activasResult?.length ?? 0) + (aceitasResult?.length ?? 0);
+      if (totalAtivas > 0) {
+        _showMyDialog("Você já possui uma corrida ativa. Conclua-a antes de aceitar outra.");
+        return false;
+      }
 
       await _userService.aceitarCorrida(numSeqChamado, indStatusCorrida);
       

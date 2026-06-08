@@ -9,8 +9,10 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
 import 'package:delivery_front/core/app_images.dart';
+import 'package:delivery_front/core/app_session.dart';
 import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/empresa/corridas/lista_solicitacoes_empresa_controller.dart';
+import 'package:delivery_front/motorista/corridas/lista_solicitacoes_motorista_controller.dart';
 import 'package:delivery_front/home/widgets/maps/mapsSheet.dart';
 import 'package:delivery_front/info_corridas_page/info_corrida_page.dart';
 import 'package:delivery_front/shared/models/motorista/models/lista_solicitacoes.dart';
@@ -28,6 +30,9 @@ import 'package:map_launcher/map_launcher.dart' as mapN;
 import 'package:permission_handler/permission_handler.dart' as ph;
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:delivery_front/modules/cod/services/cod_service.dart';
+import 'package:delivery_front/modules/cod/screens/pendencias_motorista_screen.dart';
+import 'package:delivery_front/modules/monitoring/screens/available_rides_screen.dart';
 
 bool carregouChamado = false;
 
@@ -58,6 +63,10 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   UserService _userService = new UserService();
   bool _isMovingManually = false;
+
+  // Banner de corrida ativa — previne BUG-015 recorrência
+  SolicitacaoMotorista? _activeRide;
+  Timer? _activeRideTimer;
 
   Marker? marker;
   Circle? circle;
@@ -118,7 +127,11 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             final position = await Geolocator.getCurrentPosition();
 
             if (user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA) {
-              final endereco = user.usuarioResp?.empresas?.first.enderecos?.first;
+              final endereco = (user.usuarioResp?.empresas?.isNotEmpty == true)
+                  ? user.usuarioResp!.empresas!.first.enderecos?.isNotEmpty == true
+                      ? user.usuarioResp!.empresas!.first.enderecos!.first
+                      : null
+                  : null;
               if (endereco != null) {
                 final enderecoStr = '${endereco.desRua},${endereco.desNumero}, ${endereco.desCidade}';
                 final results = await geo.locationFromAddress(enderecoStr);
@@ -211,17 +224,49 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     }
   }
 
+  /// Verifica se há corrida ativa (status 1 ou 2) e atualiza o banner.
+  /// Chamado no initState, a cada 20s e ao retornar do background.
+  Future<void> _checkActiveRide() async {
+    if (_isDisposed || !mounted) return;
+    if (user.indTipo != ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA) return;
+    try {
+      final ctrl = ListaSolicitacoesMotoristaController(context);
+      final aceitas = await ctrl.buscaListaSolicitacoes(
+        indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA,
+      );
+      final emAndamento = await ctrl.buscaListaSolicitacoes(
+        indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO,
+      );
+      final ativas = [...aceitas, ...emAndamento];
+      if (mounted) {
+        setState(() {
+          _activeRide = ativas.isNotEmpty ? ativas.first : null;
+        });
+      }
+    } catch (e) {
+      debugPrint('Erro ao verificar corrida ativa: $e');
+    }
+  }
+
+  void _startActiveRideCheck() {
+    _checkActiveRide();
+    _activeRideTimer?.cancel();
+    _activeRideTimer = Timer.periodic(const Duration(seconds: 20), (_) {
+      if (!_isDisposed && mounted) _checkActiveRide();
+    });
+  }
+
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
     carregaPerfil();
     // set custom marker pins
     setSourceAndDestinationIcons();
     if (user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA) {
       _verificaGPSAtivo();
-
-      //_buscaNovosChamados();
       _buscaChamadosLeitura();
+      _startActiveRideCheck();
     } else {
       _verificaGPSAtivo();
     }
@@ -250,22 +295,16 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     //   //PIPView.of(context)?.dispose();
     switch (state) {
       case AppLifecycleState.resumed:
-        print("app in resumed");
-
-        //_buscaNovosChamados();
-
+        if (mounted) setState(() {});
+        // Ao retornar do GPS ou de qualquer app externo, verifica corrida ativa
+        // imediatamente — evita motorista ficar sem ver corrida aceita (BUG-015)
+        _checkActiveRide();
         break;
       case AppLifecycleState.inactive:
-        print("app in inactive");
-        // if (ApiBaseHelper.userSessao!.indTipo == 1) carregaFlutuante();
         break;
       case AppLifecycleState.paused:
-        print("app in paused");
-
-        // if (ApiBaseHelper.userSessao!.indTipo == 1) carregaFlutuante();
         break;
       case AppLifecycleState.detached:
-        print("app in detached");
         break;
     }
   }
@@ -404,7 +443,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<Uint8List> getMarker() async {
     // Verifica se o motorista tem tipo e cor definidos
-    final motorista = user.usuarioResp?.motoristas?.first;
+    final motorista = (user.usuarioResp?.motoristas?.isNotEmpty == true)
+        ? user.usuarioResp!.motoristas!.first
+        : null;
     final tipoMoto = motorista?.desTipoMoto ?? 'Street';
     final corMoto = motorista?.desCorMoto ?? '#E53935';
     
@@ -557,37 +598,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       //  Navigator.pop(context);
       return true;
     } else {
-      return await showDialog(
+      return await showDialog<bool>(
         context: context,
-        builder: (context) => new AlertDialog(
-          title: new Text('Confirmação'),
-          content: new Text('Deseja fechar o app'),
+        builder: (context) => AlertDialog(
+          title: const Text('Confirmação'),
+          content: const Text('Deseja fechar o app?'),
           actions: <Widget>[
-            new GestureDetector(
-              onTap: () => Navigator.of(context).pop(true),
-              child: Text(
-                "NÃO",
-                style: TextStyle(fontSize: 14),
-              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text("NÃO"),
             ),
-            SizedBox(height: 20),
-            new GestureDetector(
-              onTap: () async {
-                if (can)
-                  Navigator.of(context).pop();
-                else
-                  SystemNavigator.pop();
-                // can = Navigator.canPop(context);
-                // if (can) Navigator.of(context).pop(true);
-                // Navigator.of(context).pop(true);
-
-                //Navigator.popUntil(context, (route) => false);
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+                SystemNavigator.pop();
               },
-              child: Text("SIM", style: TextStyle(fontSize: 14)),
+              child: const Text("SIM", style: TextStyle(color: Colors.red)),
             ),
           ],
         ),
-      );
+      ) ?? false;
     }
   }
 
@@ -712,70 +742,33 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                     onPressed: () async {
                       ListaSolicitacoesEmpresaController controllerSol =
                           ListaSolicitacoesEmpresaController(context);
-                      await controllerSol.aceitarCorrida(sol.numSeq!, 1);
-                      if (true) {
-                        final availableMaps =
-                            await mapN.MapLauncher.installedMaps;
-                        // print(
-                        //     availableMaps); // [AvailableMap { mapName: Google Maps, mapType: google }, ...]
-
-                        // await availableMaps.first.showDirections(
-                        //     destination: map.Coords(37.759392, -122.5107336));
-                        // MapsSheet.show(
-                        //   context: context,
-                        //   onMapTap: (map) {
-                        //     map.showDirections(
-                        //       destination: mapN.Coords(-29.1860583, -51.2377713),
-                        //     );
-                        //   },
-                        // );
-                        if (sol.dbEmpresasByCodEmpresa!.desLatitude != null &&
-                            sol.dbEmpresasByCodEmpresa!.desLongitude != null) {
-                          MapsSheet.show(
-                            context: context,
-                            onMapTap: (map) {
-                              map.showDirections(
-                                destination: mapN.Coords(
-                                    sol.dbEmpresasByCodEmpresa!.desLatitude!,
-                                    sol.dbEmpresasByCodEmpresa!.desLongitude!),
-                              );
-                            },
-                          );
-                        } else {
+                      final accepted = await controllerSol.aceitarCorrida(sol.numSeq!, 1);
+                      controller.dismiss();
+                      if (accepted) {
+                        if (sol.dbEmpresasByCodEmpresa?.desLatitude != null &&
+                            sol.dbEmpresasByCodEmpresa?.desLongitude != null) {
+                          if (context.mounted) {
+                            MapsSheet.show(
+                              context: context,
+                              onMapTap: (map) {
+                                map.showDirections(
+                                  destination: mapN.Coords(
+                                      sol.dbEmpresasByCodEmpresa!.desLatitude!,
+                                      sol.dbEmpresasByCodEmpresa!.desLongitude!),
+                                );
+                              },
+                            );
+                          }
+                        }
+                        // Atualiza banner de corrida ativa imediatamente
+                        _checkActiveRide();
+                      } else {
+                        if (context.mounted) {
                           context.showSuccessBar(
                             duration: Duration(seconds: 5),
-                            content: Text(
-                                "Não será possível iniciar navegação, solicitação não possui coordenadas"),
+                            content: Text("Corrida já iniciada por outro motorista."),
                           );
                         }
-
-                        // bool? existe = await mapN.MapLauncher.isMapAvailable(
-                        //     mapN.MapType.google);
-                        // if (existe!) {
-                        //   await mapN.MapLauncher.showDirections(
-                        //       mapType: mapN.MapType.google,
-                        //       destination: mapN.Coords(37.759392, -122.5107336));
-                        // }
-
-                        // existe = await mapN.MapLauncher.isMapAvailable(
-                        //     mapN.MapType.waze);
-                        // if (existe!) {
-                        //   await mapN.MapLauncher.showDirections(
-                        //       mapType: mapN.MapType.waze,
-                        //       destination: mapN.Coords(37.759392, -122.5107336));
-                        // }
-
-                        // await availableMaps.first.showMarker(
-                        //   coords: mapN.Coords(
-                        //       sol.dbEmpresasByCodEmpresa!.desLatitude!, sol.dbEmpresasByCodEmpresa!.desLongitude!),
-                        //   title: "${sol.dbEmpresasByCodEmpresa!.desNomeFantasia} - Retirada",
-                        // );
-                      } else {
-                        context.showSuccessBar(
-                          duration: Duration(seconds: 5),
-                          content:
-                              Text("Corrida já iniciada por outro motorista."),
-                        );
                       }
                     },
                     child: Text('Aceitar e Digirir até estabelecimento',
@@ -798,17 +791,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   @override
   void dispose() {
     _isDisposed = true;
-    
-    // Cancela timers periódicos para evitar memory leaks
+    WidgetsBinding.instance.removeObserver(this);
     _gpsVerificationTimer?.cancel();
     _chamadosPollingTimer?.cancel();
-    
-    // Cancela subscription de localização
+    _activeRideTimer?.cancel();
     _locationSubscription?.cancel();
     _locationSubscription = null;
-    
-    //SystemAlertWindow.closeSystemWindow();
-    // PIPView.of(context)?.dispose();
     super.dispose();
   }
 
@@ -852,17 +840,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     final pageName = route?.settings.name ?? "";
     var page = log(pageName);
 
-    return MaterialApp(
-        theme: ThemeData(
-          primarySwatch: AppColors.primaryBlack,
-          hintColor: Colors.black,
-          appBarTheme: AppBarTheme(color: Colors.black),
-          textTheme: Theme.of(context).textTheme.apply(
-                bodyColor: Colors.black,
-                displayColor: Colors.black,
-              ),
-        ),
-        home: Scaffold(
+    // BUG-016: MaterialApp aninhado criava navigator interno causando tela preta
+    // ao pressionar voltar na visão empresa. Usar Scaffold diretamente.
+    return Scaffold(
           backgroundColor: Color(0xFFF5F6FA),
           appBar: AppBar(
             backgroundColor: Colors.white,
@@ -877,39 +857,93 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ),
             ),
             actions: <Widget>[
+              // Badge de pendências CoD — aparece apenas quando há pendências
+              if (user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA)
+                FutureBuilder<int>(
+                  future: CodService.countPendenciasAbertas(user.codUsuario ?? 0),
+                  builder: (_, snap) {
+                    final count = snap.data ?? 0;
+                    if (count == 0) return const SizedBox.shrink();
+                    return Padding(
+                      padding: const EdgeInsets.only(right: 6),
+                      child: Stack(
+                        children: [
+                          IconButton(
+                            icon: const Icon(Icons.warning_amber_rounded,
+                                color: Colors.orange),
+                            tooltip: '$count pendência(s) de cobrança',
+                            onPressed: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => PendenciasMotoristaScreen(
+                                    codMotorista: user.codUsuario ?? 0,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                          Positioned(
+                            right: 6, top: 6,
+                            child: Container(
+                              padding: const EdgeInsets.all(3),
+                              decoration: const BoxDecoration(
+                                color: Colors.red,
+                                shape: BoxShape.circle,
+                              ),
+                              child: Text(
+                                '$count',
+                                style: const TextStyle(
+                                    fontSize: 10,
+                                    color: Colors.white,
+                                    fontWeight: FontWeight.bold),
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
               Visibility(
                 visible:
                     user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA
                         ? true
                         : false,
-                child: TextButton.icon(
-                  label: Text(
-                    "Novas corridas",
-                    style: GoogleFonts.poppins(
-                      color: Color(0xFFE53935),
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
+                child: Padding(
+                  padding: EdgeInsets.only(right: 8),
+                  child: ElevatedButton.icon(
+                    label: Text(
+                      "Corridas",
+                      style: GoogleFonts.poppins(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    icon: Icon(Icons.motorcycle_rounded, size: 18),
+                    onPressed: () {
+                      if (!mounted) return;
+                      final motoId = user.codUsuario?.toString() ?? 'moto';
+                      final motoName = user.desNome ?? 'Motorista';
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => AvailableRidesScreen(
+                            motoristaId: motoId,
+                            motoristaName: motoName,
+                          ),
+                        ),
+                      );
+                    },
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFE53935),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
+                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
-                  icon: Icon(
-                    Icons.newspaper_outlined,
-                    color: Color(0xFFE53935),
-                    size: 18,
-                  ),
-                  onPressed: () {
-                    if (!mounted) return;
-                    WidgetsBinding.instance.addPostFrameCallback((_) {
-                      if (mounted) {
-                        Navigator.pushNamed(
-                          context,
-                          AppRoutes.corridas,
-                          arguments: {
-                            'indTipoDefault': ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA,
-                          },
-                        );
-                      }
-                    });
-                  },
                 ),
               ),
               Visibility(
@@ -1112,6 +1146,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                         ),
                       ),
                     ),
+                    // Banner persistente de corrida ativa — sempre visível
+                    // quando motorista tem corrida aceita ou em andamento
+                    if (_activeRide != null)
+                      Positioned(
+                        bottom: 12,
+                        left: 12,
+                        right: 12,
+                        child: _ActiveRideBanner(
+                          ride: _activeRide!,
+                          onTap: () {
+                            Navigator.pushNamed(
+                              context,
+                              AppRoutes.corridas,
+                              arguments: {
+                                'indTipoDefault': _activeRide!.indStatusCorrida,
+                              },
+                            ).then((_) => _checkActiveRide());
+                          },
+                        ),
+                      ),
                   ],
                 )
               : InfoCorridaPage(
@@ -1334,41 +1388,6 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                       }),
                 ),
                 Visibility(
-                    visible: user.indTipo == 1 ? false : false,
-                    child: ListTile(
-                        leading: Icon(Icons.motorcycle_outlined, color: Color(0xFF9E9E9E)),
-                        title: Text(
-                          "Corridas",
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: Color(0xFF1A1A1A),
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Minhas corridas",
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            fontWeight: FontWeight.normal,
-                            color: Color(0xFF757575),
-                          ),
-                        ),
-                        trailing: Icon(Icons.chevron_right, color: Color(0xFF9E9E9E)),
-                        onTap: () {
-                          if (!mounted) return;
-                          Navigator.pop(context);
-                          WidgetsBinding.instance.addPostFrameCallback((_) {
-                            if (mounted) {
-                              Navigator.pushNamed(
-                                context,
-                                AppRoutes.corridasEmpresa,
-                                arguments: {'indTipoDefault': -1},
-                              );
-                            }
-                          });
-                        }),
-                    ),
-                Visibility(
                   visible:
                       user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA
                           ? true
@@ -1514,8 +1533,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               ],
             ),
           ),
-        ),
-    );
+        );
   }
 
   showAlertDialog(BuildContext context) {
@@ -1563,15 +1581,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           color: Colors.white,
         ),
       ),
-      onPressed: () async {
-        if (!context.mounted) return;
-        Navigator.of(context).pop(); // Fecha o dialog primeiro
-        await _userService.logoffLocalDB();
-        if (!context.mounted) return;
-        Navigator.of(context).pushNamedAndRemoveUntil(
-          AppRoutes.splash,
-          (Route<dynamic> route) => false,
-        );
+      onPressed: () {
+        Navigator.of(context).pop(); // fecha dialog
+        AppSession.logout(context);  // navega imediatamente, cleanup async
       },
     );
 
@@ -1936,4 +1948,98 @@ class Utils {
     ]
   }
 ]''';
+}
+
+/// Banner persistente exibido no mapa do motorista quando há corrida ativa.
+/// Garante que o motorista nunca perca o acesso à corrida aceita, independente
+/// de como foi aceita (flash, lista de pedidos ou AvailableRidesScreen).
+class _ActiveRideBanner extends StatelessWidget {
+  final SolicitacaoMotorista ride;
+  final VoidCallback onTap;
+
+  const _ActiveRideBanner({required this.ride, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final isAceita =
+        ride.indStatusCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA;
+    final statusLabel = isAceita ? 'Corrida aceita' : 'Corrida em andamento';
+    final statusColor = isAceita ? const Color(0xFFF57C00) : const Color(0xFF2ECC71);
+    final empresa = ride.dbEmpresasByCodEmpresa?.desNomeFantasia ?? 'Empresa';
+    final destino = ride.desEnderecoEntrega ?? 'Endereço não informado';
+
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: const [
+            BoxShadow(color: Colors.black26, blurRadius: 12, offset: Offset(0, 4)),
+          ],
+          border: Border.all(color: statusColor, width: 2),
+        ),
+        child: Row(
+          children: [
+            Container(
+              width: 44,
+              height: 44,
+              decoration: BoxDecoration(
+                color: statusColor.withOpacity(0.12),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(Icons.delivery_dining_rounded, color: statusColor, size: 26),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: statusColor,
+                      borderRadius: BorderRadius.circular(6),
+                    ),
+                    child: Text(
+                      statusLabel,
+                      style: GoogleFonts.poppins(
+                          fontSize: 10, fontWeight: FontWeight.w700, color: Colors.white),
+                    ),
+                  ),
+                  const SizedBox(height: 3),
+                  Text(
+                    empresa,
+                    style: GoogleFonts.poppins(
+                        fontSize: 13, fontWeight: FontWeight.w700, color: const Color(0xFF1A1A1A)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  Text(
+                    '→ $destino',
+                    style: GoogleFonts.poppins(fontSize: 11, color: const Color(0xFF757575)),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: const Color(0xFFE53935),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Text(
+                'VER',
+                style: GoogleFonts.poppins(
+                    fontSize: 13, fontWeight: FontWeight.w800, color: Colors.white),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
 }

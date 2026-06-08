@@ -9,8 +9,8 @@ import 'package:dio/dio.dart';
 /// Segue o mesmo padrão do ViaCepService para manter consistência
 class CnpjService {
   static BaseOptions options = BaseOptions(
-    connectTimeout: const Duration(seconds: 30),
-    receiveTimeout: const Duration(seconds: 30),
+    connectTimeout: const Duration(seconds: 15),
+    receiveTimeout: const Duration(seconds: 15),
     headers: {
       HttpHeaders.contentTypeHeader: "application/json",
     },

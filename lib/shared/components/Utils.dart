@@ -1,9 +1,21 @@
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
+import 'package:delivery_front/shared/components/app_alert.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
+import 'package:intl/intl.dart';
 import 'package:map_launcher/map_launcher.dart';
 
 class Utils {
+  static final _brlFormatter = NumberFormat.currency(
+    locale: 'pt_BR',
+    symbol: 'R\$ ',
+    decimalDigits: 2,
+  );
+
+  static String formatBRL(double? value) {
+    return _brlFormatter.format(value ?? 0.0);
+  }
+
   static String getDesStatusCorrida(int? indStatusCorrida) {
     if (ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA == indStatusCorrida)
       return "Nova corrida";
@@ -19,6 +31,12 @@ class Utils {
 
     if (ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA == indStatusCorrida)
       return "Corrida cancelada";
+
+    if (ApiBaseHelper.IND_STATUS_CORRIDA_5_AGUARDANDO_COBRANCA == indStatusCorrida)
+      return "Aguardando cobrança";
+
+    if (ApiBaseHelper.IND_STATUS_CORRIDA_6_PENDENCIA_ABERTA == indStatusCorrida)
+      return "Pendência aberta";
 
     return "";
   }
@@ -82,6 +100,12 @@ class Utils {
     if (ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA == indStatusCorrida)
       return Icons.cancel;
 
+    if (ApiBaseHelper.IND_STATUS_CORRIDA_5_AGUARDANDO_COBRANCA == indStatusCorrida)
+      return Icons.payments_rounded;
+
+    if (ApiBaseHelper.IND_STATUS_CORRIDA_6_PENDENCIA_ABERTA == indStatusCorrida)
+      return Icons.warning_amber_rounded;
+
     return Icons.where_to_vote_sharp;
   }
 
@@ -101,6 +125,12 @@ class Utils {
     if (ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA == indStatusCorrida)
       return Colors.red;
 
+    if (ApiBaseHelper.IND_STATUS_CORRIDA_5_AGUARDANDO_COBRANCA == indStatusCorrida)
+      return Colors.purple;
+
+    if (ApiBaseHelper.IND_STATUS_CORRIDA_6_PENDENCIA_ABERTA == indStatusCorrida)
+      return Colors.deepOrange;
+
     return Colors.orange;
   }
 
@@ -113,14 +143,9 @@ class Utils {
     return locationFromAddress(addres);
   }
 
-  static ScaffoldFeatureController<SnackBar, SnackBarClosedReason> getSnackBar(
-      String msg, BuildContext context) {
-    return ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        duration: Duration(seconds: 5),
-        content: Text(msg),
-      ),
-    );
+  static void getSnackBar(String msg, BuildContext context,
+      {bool isError = false, bool isSuccess = false}) {
+    AppAlert.show(context, msg, isError: isError, isSuccess: isSuccess);
   }
 
   static String mapStyles = '''[
@@ -282,5 +307,29 @@ class Utils {
       }
     ]
   }
+]''';
+
+  static String darkMapStyles = '''[
+  {"elementType":"geometry","stylers":[{"color":"#212121"}]},
+  {"elementType":"labels.icon","stylers":[{"visibility":"off"}]},
+  {"elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},
+  {"elementType":"labels.text.stroke","stylers":[{"color":"#212121"}]},
+  {"featureType":"administrative","elementType":"geometry","stylers":[{"color":"#757575"}]},
+  {"featureType":"administrative.country","elementType":"labels.text.fill","stylers":[{"color":"#9e9e9e"}]},
+  {"featureType":"administrative.land_parcel","stylers":[{"visibility":"off"}]},
+  {"featureType":"administrative.locality","elementType":"labels.text.fill","stylers":[{"color":"#bdbdbd"}]},
+  {"featureType":"poi","elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},
+  {"featureType":"poi.park","elementType":"geometry","stylers":[{"color":"#181818"}]},
+  {"featureType":"poi.park","elementType":"labels.text.fill","stylers":[{"color":"#616161"}]},
+  {"featureType":"poi.park","elementType":"labels.text.stroke","stylers":[{"color":"#1b1b1b"}]},
+  {"featureType":"road","elementType":"geometry.fill","stylers":[{"color":"#2c2c2c"}]},
+  {"featureType":"road","elementType":"labels.text.fill","stylers":[{"color":"#8a8a8a"}]},
+  {"featureType":"road.arterial","elementType":"geometry","stylers":[{"color":"#373737"}]},
+  {"featureType":"road.highway","elementType":"geometry","stylers":[{"color":"#3c3c3c"}]},
+  {"featureType":"road.highway.controlled_access","elementType":"geometry","stylers":[{"color":"#4e4e4e"}]},
+  {"featureType":"road.local","elementType":"labels.text.fill","stylers":[{"color":"#616161"}]},
+  {"featureType":"transit","elementType":"labels.text.fill","stylers":[{"color":"#757575"}]},
+  {"featureType":"water","elementType":"geometry","stylers":[{"color":"#000000"}]},
+  {"featureType":"water","elementType":"labels.text.fill","stylers":[{"color":"#3d3d3d"}]}
 ]''';
 }

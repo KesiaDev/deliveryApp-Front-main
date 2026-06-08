@@ -20,6 +20,7 @@ class CancelCorridaDialog extends StatefulWidget {
   }) async {
     return showDialog<String?>(
       context: context,
+      useRootNavigator: false,
       barrierDismissible: false,
       builder: (context) => CancelCorridaDialog(
         corridaId: corridaId,

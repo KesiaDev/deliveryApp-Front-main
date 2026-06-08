@@ -3,8 +3,10 @@ import 'dart:developer';
 
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
-import 'package:delivery_front/home/widgets/maps/mapsSheet.dart';
 import 'package:delivery_front/login/login_controller.dart';
+import 'package:delivery_front/modules/cod/models/cod_model.dart';
+import 'package:delivery_front/modules/cod/screens/confirmacao_cobranca_screen.dart';
+import 'package:delivery_front/modules/cod/services/cod_service.dart';
 import 'package:delivery_front/motorista/corridas/lista_solicitacoes_motorista_controller.dart';
 import 'package:delivery_front/modules/chat/screens/chat_screen.dart';
 import 'package:delivery_front/modules/rating/services/rating_automatic_service.dart';
@@ -14,7 +16,6 @@ import 'package:delivery_front/shared/models/motorista/models/lista_solicitacoes
 import 'package:delivery_front/shared/dialogs/cancel_corrida_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:geocoding/geocoding.dart';
-import 'package:map_launcher/map_launcher.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 class ListaSolicitacoesMotoristaPage extends StatefulWidget {
@@ -40,12 +41,17 @@ class _ListaSolicitacoesMotoristaPageState
     extends State<ListaSolicitacoesMotoristaPage> {
   ListaSolicitacoesMotoristaController? _controller;
   late VoidCallback _controllerListener;
+  // BUG-022: chave para forçar rebuild do ListaCemMotoristaView quando o
+  // controller muda (notifyListeners), garantindo reload do FutureBuilder.
+  Key _listKey = UniqueKey();
 
   @override
   void initState() {
     super.initState();
     _controller = ListaSolicitacoesMotoristaController(context);
-    _controllerListener = () { if (mounted) setState(() {}); };
+    _controllerListener = () {
+      if (mounted) setState(() { _listKey = UniqueKey(); });
+    };
     _controller!.addListener(_controllerListener);
   }
 
@@ -68,19 +74,23 @@ class _ListaSolicitacoesMotoristaPageState
           title: Text(ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ==
                   widget.indTipoDefault
               ? 'Pedidos disponíveis'
-              : ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO ==
+              : ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA ==
                       widget.indTipoDefault
-                  ? 'Corridas em andamento'
-                  : ApiBaseHelper.IND_STATUS_CORRIDA_3_CONCLUIDA ==
+                  ? 'Corridas aceitas'
+                  : ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO ==
                           widget.indTipoDefault
-                      ? 'Corridas concluídas'
-                      : ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA ==
+                      ? 'Corridas em andamento'
+                      : ApiBaseHelper.IND_STATUS_CORRIDA_3_CONCLUIDA ==
                               widget.indTipoDefault
-                          ? 'Corridas canceladas'
-                          : 'Minhas corridas'),
+                          ? 'Corridas concluídas'
+                          : ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA ==
+                                  widget.indTipoDefault
+                              ? 'Corridas canceladas'
+                              : 'Minhas corridas'),
         ),
         body: Center(
             child: ListaCemMotoristaView(
+          key: _listKey,
           controller: _controller!,
           indStatusDefault: widget.indTipoDefault,
           isAdm: widget.isAdm ?? false,
@@ -290,6 +300,13 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
       subtitleObsEntrega = subtitleObsEntrega + ' · ${Utils.formatBRL(amigo.vlrTotalMotorista)}';
     }
 
+    // Badge de Cobrança na Entrega
+    if (amigo.isCod) {
+      final vlrCod = amigo.vlrCobrancaCliente?.toStringAsFixed(2) ?? '?';
+      final maq = amigo.indMaquininha == 1 ? ' 💳' : '';
+      subtitleObsEntrega = '💰 Cobrar do cliente: R\$ $vlrCod$maq\n$subtitleObsEntrega';
+    }
+
     // Build multi-destination steps label when delivery has ordered destinations
     if (amigo.destinos != null && amigo.destinos!.length > 1) {
       final sorted = [...amigo.destinos!]..sort((a, b) => a.ordem.compareTo(b.ordem));
@@ -410,128 +427,11 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
           children: <Widget>[
             //Text(subtitle),
             FloatingActionButton(
+              heroTag: 'nav_${amigo.numSeq}',
               onPressed: () async {
-                // Add your onPressed code here!
-                //Caso no momento do clique já possua acesso, ao clicar será retirado acesso
-                //Caso não tenha acesso, ao ser clicar enviara true para atualizar
-                final availableMaps = await Utils.getInstalledMaps();
-                // print(
-                //     availableMaps); // [AvailableMap { mapName: Google Maps, mapType: google }, ...]
-
-                // await availableMaps.first.showDirections(
-                //     destination: map.Coords(37.759392, -122.5107336));
-                // MapsSheet.show(
-                //   context: context,
-                //   onMapTap: (map) {
-                //     map.showDirections(
-                //       destination: mapN.Coords(-29.1860583, -51.2377713),
-                //     );
-                //   },
-                // );
-
-                if (ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA ==
-                        amigo.indStatusCorrida! ||
-                    ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ==
-                        amigo.indStatusCorrida!) {
-                  List<Location>? locations = null;
-                  if (amigo.dbEmpresasByCodEmpresa!.desLatitude != null ||
-                      amigo.dbEmpresasByCodEmpresa!.desLongitude != null) {
-                    //Caso latitude ou longitude sejam nulas procura atraves do endereço
-                    //  locations = await Utils.getLocationByAddress(
-                    //      amigo.desEnderecoEntrega! + "," + amigo.desNumeroEndereco!);
-
-                    if (locations == null) {
-                      // Location local2 = locations.first;
-
-                      // amigo.desLongitudeEntrega = local2.longitude;
-                      //
-                    }
-
-                    if (amigo.dbEmpresasByCodEmpresa!.desLatitude != null &&
-                        amigo.dbEmpresasByCodEmpresa!.desLongitude != null) {
-                      MapsSheet.show(
-                        context: _context,
-                        onMapTap: (map) {
-                          map.showDirections(
-                            destinationTitle:
-                                "${amigo.enderecoEmpresa} , - Pedido retirada",
-                            destination: Coords(
-                                amigo.dbEmpresasByCodEmpresa!.desLatitude!,
-                                amigo.dbEmpresasByCodEmpresa!.desLongitude!),
-                          );
-                        },
-                      );
-                    } else {
-                      Utils.getSnackBar(
-                          "Não  é possível iniciar navegação. Motivo: Faltam informações do endereço",
-                          _context);
-                    }
-                  }
-                } else {
-                  List<Location>? locations = null;
-                  if (amigo.desLatitudeEntrega == null ||
-                      amigo.desLongitudeEntrega == null) {
-                    //Caso latitude ou longitude sejam nulas procura atraves do endereço
-                    //  locations = await Utils.getLocationByAddress(
-                    //      amigo.desEnderecoEntrega! + "," + amigo.desNumeroEndereco!);
-
-                    locations = await locationFromAddress(
-                        amigo.desEnderecoEntrega! +
-                            "," +
-                            amigo.desNumeroEndereco!);
-
-                    if (locations != null) {
-                      Location local2 = locations.first;
-
-                      amigo.desLongitudeEntrega = local2.longitude;
-                      amigo.desLatitudeEntrega = local2.latitude;
-                    }
-                  }
-
-                  if (amigo.desLatitudeEntrega != null &&
-                      amigo.desLongitudeEntrega != null) {
-                    MapsSheet.show(
-                      context: _context,
-                      onMapTap: (map) {
-                        map.showDirections(
-                          destinationTitle:
-                              "${amigo.desEnderecoEntrega} , ${amigo.desNumeroEndereco} - Entrega",
-                          destination: Coords(amigo.desLatitudeEntrega!,
-                              amigo.desLongitudeEntrega!),
-                        );
-                      },
-                    );
-                  } else {
-                    Utils.getSnackBar(
-                        "Não  é possível iniciar navegação. Motivo: Faltam informações do endereço",
-                        _context);
-                  }
-                }
-                // bool? existe = await mapN.MapLauncher.isMapAvailable(
-                //     mapN.MapType.google);
-                // if (existe!) {
-                //   await mapN.MapLauncher.showDirections(
-                //       mapType: mapN.MapType.google,
-                //       destination: mapN.Coords(37.759392, -122.5107336));
-                // }
-
-                // existe = await mapN.MapLauncher.isMapAvailable(
-                //     mapN.MapType.waze);
-                // if (existe!) {
-                //   await mapN.MapLauncher.showDirections(
-                //       mapType: mapN.MapType.waze,
-                //       destination: mapN.Coords(37.759392, -122.5107336));
-                // }
-
-                //  await availableMaps.first.showMarker(
-                //    coords: Coords(
-                //        amigo.desLatitudeEntrega!, amigo.desLongitudeEntrega!),
-                //    title: "${amigo.desEnderecoEntrega} , ${amigo.desNumeroEndereco} - Entrega",
-                //  );
+                await _openInAppNavigation(_context, amigo);
               },
-              //label: Text("", style: TextStyle(fontSize: 8)),
-              child: Icon(Icons.location_on),
-              //icon: Icon(Icons.location_on),
+              child: const Icon(Icons.navigation_rounded),
               backgroundColor: Colors.blue,
             ),
           ],
@@ -587,24 +487,32 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
       Widget custom2,
       Widget custom3,
       Widget custom4) {
+    // BUG-019: layout reestruturado — botões abaixo do conteúdo para evitar
+    // overflow horizontal em telas pequenas e garantir scroll vertical correto.
     return Padding(
-      padding: const EdgeInsets.all(15.0),
-      child: Row(
+      padding: const EdgeInsets.symmetric(horizontal: 12.0, vertical: 8.0),
+      child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: <Widget>[
           Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [thumbnail],
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              thumbnail,
+              const SizedBox(width: 8),
+              Expanded(
+                child: _videoDescription(title, user ?? "", viewCount,
+                    dadosCorrida, enderecoEntrega, obsEntrega),
+              ),
+            ],
           ),
-          Expanded(
-            flex: 3,
-            child: _videoDescription(title, user ?? "", viewCount, dadosCorrida,
-                enderecoEntrega, obsEntrega),
+          const SizedBox(height: 8),
+          // Botões de ação em linha com wrap para caber em qualquer tela
+          Wrap(
+            spacing: 8,
+            runSpacing: 4,
+            children: [custom, custom2, custom3, custom4],
           ),
-          custom,
-          custom2,
-          custom3,
-          custom4,
+          const Divider(),
         ],
       ),
     );
@@ -724,6 +632,77 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
     );
   }
 
+  /// Abre a navegação in-app para retirada ou entrega dependendo do status da corrida
+  Future<void> _openInAppNavigation(BuildContext context, SolicitacaoMotorista solicitacao) async {
+    final corridaId = solicitacao.numSeq?.toString() ?? '';
+    final isPickup = solicitacao.indStatusCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ||
+        solicitacao.indStatusCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA;
+
+    if (isPickup) {
+      // Navegando até a empresa para retirar
+      double? lat = solicitacao.dbEmpresasByCodEmpresa?.desLatitude;
+      double? lon = solicitacao.dbEmpresasByCodEmpresa?.desLongitude;
+
+      if ((lat == null || lon == null) && solicitacao.enderecoEmpresa != null) {
+        try {
+          final locs = await locationFromAddress(solicitacao.enderecoEmpresa!);
+          if (locs.isNotEmpty) {
+            lat = locs.first.latitude;
+            lon = locs.first.longitude;
+          }
+        } catch (_) {}
+      }
+
+      if (lat != null && lon != null && context.mounted) {
+        Navigator.pushNamed(context, AppRoutes.motoristaNavigation, arguments: {
+          'corridaId': corridaId,
+          'destinationLat': lat,
+          'destinationLng': lon,
+          'destinationTitle': solicitacao.enderecoEmpresa ?? 'Local de retirada',
+          'destinationType': 'pickup',
+        });
+      } else if (context.mounted) {
+        Utils.getSnackBar('Endereço de retirada não disponível.', context);
+      }
+    } else {
+      // Navegando até o cliente para entregar
+      double? lat = solicitacao.desLatitudeEntrega;
+      double? lon = solicitacao.desLongitudeEntrega;
+
+      if ((lat == null || lon == null) && solicitacao.desEnderecoEntrega != null) {
+        try {
+          final addr = '${solicitacao.desEnderecoEntrega}, ${solicitacao.desNumeroEndereco ?? ''}';
+          final locs = await locationFromAddress(addr);
+          if (locs.isNotEmpty) {
+            lat = locs.first.latitude;
+            lon = locs.first.longitude;
+            solicitacao.desLatitudeEntrega = lat;
+            solicitacao.desLongitudeEntrega = lon;
+          }
+        } catch (_) {}
+      }
+
+      if (lat != null && lon != null && context.mounted) {
+        final title = '${solicitacao.desEnderecoEntrega ?? 'Entrega'}'
+            '${solicitacao.desNumeroEndereco != null ? ', ${solicitacao.desNumeroEndereco}' : ''}';
+        Navigator.pushNamed(context, AppRoutes.motoristaNavigation, arguments: {
+          'corridaId': corridaId,
+          'destinationLat': lat,
+          'destinationLng': lon,
+          'destinationTitle': title,
+          'destinationType': 'delivery',
+        });
+      } else if (context.mounted) {
+        Utils.getSnackBar('Endereço de entrega não disponível.', context);
+      }
+    }
+  }
+
+  /// Abre navegação in-app direto para o ponto de retirada (usado ao aceitar corrida)
+  Future<void> _openPickupNavigation(BuildContext context, SolicitacaoMotorista solicitacao) async {
+    await _openInAppNavigation(context, solicitacao);
+  }
+
   showAlertDialog(
       BuildContext _context,
       int numSeqChamado,
@@ -774,24 +753,62 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
               await _controller.aceitarCorrida(numSeqChamado, nextStatus);
           if (sucess) {
             Navigator.of(_context).pop();
-            if (ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ==
-                indStatusAtualCorrida) {
+            // Abre GPS direto para retirada (estilo Uber/iFood)
+            await _openPickupNavigation(_context, solicitacao);
+            // BUG-015: após GPS abrir, navega para corridas aceitas
+            // para o motorista não ficar preso na tela de "0 corridas disponíveis"
+            if (_context.mounted) {
               Navigator.pushNamed(
                 _context,
                 AppRoutes.corridas,
                 arguments: {
-                  'indTipoDefault': ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO,
+                  'indTipoDefault':
+                      ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA,
                 },
               );
-            } else {
-              _controller.finalizarChamado(numSeqChamado, nextStatus);
-              Navigator.of(_context).pop();
             }
           }
         } else {
-          _controller.finalizarChamado(numSeqChamado, nextStatus);
-          Navigator.of(_context).pop();
-          
+          // ── Verifica se é corrida com CoD antes de encerrar ──────────
+          if (nextStatus == ApiBaseHelper.IND_STATUS_CORRIDA_3_CONCLUIDA &&
+              solicitacao.isCod) {
+            Navigator.of(_context).pop(); // Fecha o dialog de confirmação
+
+            final user = ApiBaseHelper.userSessao;
+            final codMotorista = user?.usuarioResp?.motoristas?.firstOrNull?.codMotorista ?? 0;
+
+            // Busca dados CoD do Firestore
+            CodDelivery? codData;
+            try {
+              codData = await CodService.getCodDelivery(numSeqChamado);
+            } catch (_) {}
+
+            if (codData != null && _context.mounted) {
+              // Abre tela de confirmação de cobrança
+              final result = await Navigator.push<CodDelivery?>(
+                _context,
+                MaterialPageRoute(
+                  builder: (_) => ConfirmacaoCobrancaScreen(
+                    numSeq: numSeqChamado,
+                    cod: codData!,
+                    codMotorista: codMotorista,
+                  ),
+                ),
+              );
+              // Independente do resultado, finaliza a corrida no backend
+              if (_context.mounted) {
+                _controller.finalizarChamado(numSeqChamado, nextStatus);
+              }
+            } else {
+              // CoD não encontrado — finaliza normalmente
+              _controller.finalizarChamado(numSeqChamado, nextStatus);
+            }
+          } else {
+            _controller.finalizarChamado(numSeqChamado, nextStatus);
+          }
+
+          if (_context.mounted) Navigator.of(_context).pop();
+
           // Se a corrida foi concluída (status 3), abre tela de avaliação
           if (nextStatus == ApiBaseHelper.IND_STATUS_CORRIDA_3_CONCLUIDA) {
             await Future.delayed(const Duration(milliseconds: 500));

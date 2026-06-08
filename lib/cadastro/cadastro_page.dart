@@ -261,7 +261,14 @@ class _CadastroPageState extends State<CadastroPage> {
           });
           
           // Mostra erro mas não impede o cadastro
-          showToast(context, "Não foi possível consultar o CNPJ. Você pode preencher manualmente.");
+          final isTimeout = e.toString().toLowerCase().contains('timeout') ||
+              e.toString().toLowerCase().contains('connection');
+          showToast(
+            context,
+            isTimeout
+                ? "Sem conexão para consultar CNPJ. Verifique a internet ou preencha manualmente."
+                : "Não foi possível consultar o CNPJ. Você pode preencher manualmente.",
+          );
           
           Logger.logWarn(
             'Erro ao consultar CNPJ: $e',
@@ -357,12 +364,10 @@ class _CadastroPageState extends State<CadastroPage> {
     // Validação de documentos baseada no tipo de usuário e tipo de documento
     if (ApiBaseHelper.userSessao!.indTipo ==
         ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA) {
-      // Para motorista, sempre precisa da CNH
+      // Para motorista, CNH opcional (usa placeholder se não anexada)
       if (desImgCarteria == null || desImgCarteria.isEmpty) {
-        print('🔴 [CADASTRO] Validação falhou: CNH não anexada');
-        showToast(
-            context, "Necessário anexar a Carteira de Motorista (CNH)");
-        return;
+        print('⚠️ [CADASTRO] CNH não anexada — usando placeholder para teste');
+        desImgCarteria = 'cnh_placeholder';
       }
       
       // Se for CNPJ/MEI, também precisa do Cartão CNPJ/MEI

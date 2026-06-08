@@ -174,11 +174,17 @@ class _SaldosPageAdmin extends State<SaldosPageAdmin>
     var userNew = widget.userInfo;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux == userNew!.usuarioResp!.motoristas!.first.codMotorista;
+      final motoristas = userNew?.usuarioResp?.motoristas;
+      if (motoristas != null && motoristas.isNotEmpty) {
+        codMotAux = motoristas.first.codMotorista;
+      }
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux == userNew!.usuarioResp!.empresas!.first.codEmpresa;
+      final empresas = userNew?.usuarioResp?.empresas;
+      if (empresas != null && empresas.isNotEmpty) {
+        codEmAux = empresas.first.codEmpresa;
+      }
     }
 
     return FutureBuilder<List<SaldosCorrida>>(
@@ -318,11 +324,17 @@ class _SaldosPageAdmin extends State<SaldosPageAdmin>
     var userNew = ApiBaseHelper.userSessao;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux == userNew!.usuarioResp!.motoristas!.first.codMotorista;
+      final motoristas = userNew?.usuarioResp?.motoristas;
+      if (motoristas != null && motoristas.isNotEmpty) {
+        codMotAux = motoristas.first.codMotorista;
+      }
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux == userNew!.usuarioResp!.empresas!.first.codEmpresa;
+      final empresas = userNew?.usuarioResp?.empresas;
+      if (empresas != null && empresas.isNotEmpty) {
+        codEmAux = empresas.first.codEmpresa;
+      }
     }
 
     return FutureBuilder<List<SaldosCorrida>>(

@@ -6,6 +6,7 @@ import 'package:android_intent_plus/android_intent.dart';
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
 import 'package:delivery_front/bussiness/service/admin_service.dart';
+import 'package:delivery_front/core/app_session.dart';
 import 'package:delivery_front/core/app_images.dart';
 import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/info_corridas_page/info_corrida_page.dart';
@@ -13,6 +14,8 @@ import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:delivery_front/shared/models/DadosCorrida.dart';
 import 'package:delivery_front/admin/admin_components.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
+import 'package:delivery_front/modules/monitoring/ride_simulator_screen.dart';
+import 'package:delivery_front/modules/monitoring/screens/admin_live_dashboard_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -47,6 +50,10 @@ class _HomePageAdminState extends State<HomeAdminPage>
   AdminService _adminService = AdminService();
   bool _isMovingManually = false;
 
+  // KPIs carregados assincronamente
+  int _totalEmpresasAtivas = 0;
+  double _totalRecebido = 0.0;
+
   Marker? marker;
   Circle? circle;
   GoogleMapController? _controller;
@@ -76,6 +83,32 @@ class _HomePageAdminState extends State<HomeAdminPage>
     user = ApiBaseHelper.userSessao!;
     if (user == null) user = (await _userService.getCurrentUser())!;
     if (user == null) user = new Usuario();
+    _loadAdminKpis();
+  }
+
+  Future<void> _loadAdminKpis() async {
+    try {
+      // Empresas ativas
+      final empresas = await _adminService.findEmpresas();
+      final ativas = empresas.where((e) => e.user?.indBloqueado != 1).length;
+
+      // Total recebido (saldos do mês como admin)
+      final saldos = await _userService.buscaDadosSaldosCorrida(
+        dtaIni: ApiBaseHelper.findFirstDateOfTheMonth(DateTime.now()),
+        dtaFim: ApiBaseHelper.lastDayOfMonth(DateTime.now()),
+        isAdm: true,
+      );
+      final recebido = saldos.fold<double>(0.0, (sum, s) => sum + (s.vlrTotal ?? 0.0));
+
+      if (mounted) {
+        setState(() {
+          _totalEmpresasAtivas = ativas;
+          _totalRecebido = recebido;
+        });
+      }
+    } catch (_) {
+      // Mantém valores default em caso de erro de rede
+    }
   }
 
   Future<bool> _onBackPressed() async {
@@ -87,37 +120,26 @@ class _HomePageAdminState extends State<HomeAdminPage>
       //  Navigator.pop(context);
       return true;
     } else {
-      return await showDialog(
+      return await showDialog<bool>(
         context: context,
-        builder: (context) => new AlertDialog(
-          title: new Text('Confirmação'),
-          content: new Text('Deseja fechar o app'),
+        builder: (context) => AlertDialog(
+          title: const Text('Confirmação'),
+          content: const Text('Deseja fechar o app?'),
           actions: <Widget>[
-            new GestureDetector(
-              onTap: () => Navigator.of(context).pop(true),
-              child: Text(
-                "NÃO",
-                style: TextStyle(fontSize: 14),
-              ),
+            TextButton(
+              onPressed: () => Navigator.of(context).pop(false),
+              child: const Text("NÃO"),
             ),
-            SizedBox(height: 20),
-            new GestureDetector(
-              onTap: () async {
-                if (can)
-                  Navigator.of(context).pop();
-                else
-                  SystemNavigator.pop();
-                // can = Navigator.canPop(context);
-                // if (can) Navigator.of(context).pop(true);
-                // Navigator.of(context).pop(true);
-
-                //Navigator.popUntil(context, (route) => false);
+            TextButton(
+              onPressed: () {
+                Navigator.of(context).pop(false);
+                SystemNavigator.pop();
               },
-              child: Text("SIM", style: TextStyle(fontSize: 14)),
+              child: const Text("SIM", style: TextStyle(color: Colors.red)),
             ),
           ],
         ),
-      );
+      ) ?? false;
     }
   }
 
@@ -152,18 +174,7 @@ class _HomePageAdminState extends State<HomeAdminPage>
           }
         }
       },
-      child: MaterialApp(
-        debugShowCheckedModeBanner: false,
-        theme: ThemeData(
-          primarySwatch: AppColors.primaryBlack,
-          hintColor: Colors.black,
-          appBarTheme: AppBarTheme(color: Colors.black),
-          textTheme: Theme.of(context).textTheme.apply(
-                bodyColor: Colors.black,
-                displayColor: Colors.black,
-              ),
-        ),
-        home: Scaffold(
+      child: Scaffold(
           backgroundColor: Color(0xFFF5F6FA),
           appBar: AppBar(
             backgroundColor: Colors.white,
@@ -180,9 +191,7 @@ class _HomePageAdminState extends State<HomeAdminPage>
             actions: <Widget>[
               Visibility(
                 visible: user.indTipo ==
-                        ApiBaseHelper.IND_TIP_PERFIL_99_ADMIN_SISTEMA
-                    ? false
-                    : false,
+                        ApiBaseHelper.IND_TIP_PERFIL_99_ADMIN_SISTEMA,
                 child: TextButton.icon(
                   label: Text(
                     "Motoristas",
@@ -241,7 +250,6 @@ class _HomePageAdminState extends State<HomeAdminPage>
             },
             onLogout: () => showAlertDialog(context),
           ),
-        ),
       ),
     );
   }
@@ -302,20 +310,9 @@ class _HomePageAdminState extends State<HomeAdminPage>
             ),
             SizedBox(width: 8),
             ElevatedButton(
-              onPressed: () async {
-                if (!context.mounted) return;
-                // Fecha o dialog
+              onPressed: () {
                 Navigator.of(context).pop();
-                // Aguarda um frame para garantir que o Navigator não está locked
-                WidgetsBinding.instance.addPostFrameCallback((_) async {
-                  if (!context.mounted) return;
-                  await _userService.logoffLocalDB();
-                  if (!context.mounted) return;
-                  Navigator.of(context).pushNamedAndRemoveUntil(
-                    AppRoutes.splash,
-                    (Route<dynamic> route) => false,
-                  );
-                });
+                AppSession.logout(context);
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: primaryRed,
@@ -365,7 +362,7 @@ class _HomePageAdminState extends State<HomeAdminPage>
           dtaFim: DateTime.now(),
           isAdm: true,
         ),
-        builder: (context, snapshot) {
+        builder: (_, snapshot) {
           if (!snapshot.hasData || snapshot.connectionState != ConnectionState.done) {
             return Center(
               child: CircularProgressIndicator(
@@ -380,8 +377,6 @@ class _HomePageAdminState extends State<HomeAdminPage>
           DadosCorridas corridasFinalizadas = DadosCorridas();
           DadosCorridas corridasCanceladas = DadosCorridas();
           int totalMotoristasOnline = 0;
-          int totalEmpresasAtivas = 0;
-          double totalRecebido = 0.0;
 
           for (var element in list) {
             if (element.indStatusCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA) {
@@ -400,11 +395,6 @@ class _HomePageAdminState extends State<HomeAdminPage>
               totalMotoristasOnline += (element.totalMotoristasOnline ?? 0);
             }
           }
-
-          // Busca empresas ativas
-          _adminService.findEmpresas().then((empresas) {
-            totalEmpresasAtivas = empresas.where((e) => e.user?.indBloqueado != 1).length;
-          });
 
           int corridasHoje = (corridasNovas.qtdCorridas ?? 0) + 
                             (corridasEmAndamento.qtdCorridas ?? 0) + 
@@ -470,7 +460,7 @@ class _HomePageAdminState extends State<HomeAdminPage>
                       Expanded(
                         child: AdminKpiCard(
                           title: 'Empresas ativas',
-                          value: '$totalEmpresasAtivas',
+                          value: '$_totalEmpresasAtivas',
                           icon: Icons.business_rounded,
                           iconColor: Colors.blue,
                         ),
@@ -479,7 +469,7 @@ class _HomePageAdminState extends State<HomeAdminPage>
                       Expanded(
                         child: AdminKpiCard(
                           title: 'Total recebido',
-                          value: 'R\$ ${totalRecebido.toStringAsFixed(2)}',
+                          value: 'R\$ ${_totalRecebido.toStringAsFixed(2)}',
                           icon: Icons.attach_money_rounded,
                           iconColor: AdminColors.warningOrange,
                         ),
@@ -582,7 +572,7 @@ class _HomePageAdminState extends State<HomeAdminPage>
                           Navigator.pushNamed(
                             context,
                             AppRoutes.adminTaxas,
-                            arguments: {'userInfo': Usuario()},
+                            arguments: {'userInfo': user},
                           );
                         },
                       ),
@@ -657,6 +647,40 @@ class _HomePageAdminState extends State<HomeAdminPage>
                               'indTipoDefault': ApiBaseHelper.IND_STATUS_CORRIDA_3_CONCLUIDA,
                               'isAdm': true,
                             },
+                          );
+                        },
+                      ),
+                      AdminQuickActionCard(
+                        title: 'Corridas ao Vivo',
+                        subtitle: 'Mapa + chat em tempo real',
+                        icon: Icons.location_on_rounded,
+                        iconColor: Color(0xFFE53935),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => AdminLiveDashboardScreen(
+                                adminId: user.codUsuario?.toString() ?? 'admin',
+                                adminName: user.desNome ?? 'Liocer',
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                      AdminQuickActionCard(
+                        title: 'Simular Corrida',
+                        subtitle: 'Testar moto no mapa',
+                        icon: Icons.play_circle_outline_rounded,
+                        iconColor: Color(0xFF1976D2),
+                        onTap: () {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => RideSimulatorScreen(
+                                adminId: user.codUsuario?.toString() ?? 'admin',
+                                adminName: user.desNome ?? 'Admin',
+                              ),
+                            ),
                           );
                         },
                       ),

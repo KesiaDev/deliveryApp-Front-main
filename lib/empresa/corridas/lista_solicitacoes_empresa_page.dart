@@ -1,4 +1,9 @@
+import 'dart:async';
 import 'dart:developer';
+import 'package:delivery_front/modules/cod/models/cod_model.dart';
+import 'package:delivery_front/modules/cod/screens/pendencias_motorista_screen.dart';
+import 'package:delivery_front/modules/cod/services/cod_service.dart';
+import 'package:delivery_front/services/advanced_notification_service.dart';
 
 import 'package:delivery_front/core/routes/app_routes.dart';
 import 'package:delivery_front/empresa/corridas/lista_solicitacoes_empresa_controller.dart';
@@ -17,6 +22,7 @@ import 'package:delivery_front/shared/models/motorista/models/lista_solicitacoes
 import 'package:geocoding/geocoding.dart';
 import 'package:map_launcher/map_launcher.dart';
 import 'package:google_fonts/google_fonts.dart';
+import 'package:intl/intl.dart';
 
 class ListaSolicitacoesEmpresaPage extends StatefulWidget {
 // Declare a field that holds the Todo.
@@ -38,15 +44,24 @@ class _ListaSolicitacoesEmpresaPageState
       dtaIni: ApiBaseHelper.findFirstDateOfTheWeek(DateTime.now()),
       dtaFim: ApiBaseHelper.findLastDateOfTheWeek(DateTime.now()));
 
+  VoidCallback? _listener;
+
   @override
   void initState() {
     super.initState();
     _controller = ListaSolicitacoesEmpresaController(context);
     req!.dtaIni = ApiBaseHelper.findFirstDateOfTheWeek(DateTime.now());
     req!.dtaFim = ApiBaseHelper.findLastDateOfTheWeek(DateTime.now());
-    _controller!.addListener(() {
-      setState(() {});
-    });
+    _listener = () {
+      if (mounted) setState(() {});
+    };
+    _controller!.addListener(_listener!);
+  }
+
+  @override
+  void dispose() {
+    if (_listener != null) _controller?.removeListener(_listener!);
+    super.dispose();
   }
 
   @override
@@ -168,20 +183,92 @@ class _ListaSolicitacoesEmpresaPageState
   }
 }
 
-class ListaCemMotoristaView extends StatelessWidget {
+class ListaCemMotoristaView extends StatefulWidget {
   final ListaSolicitacoesEmpresaController controller;
   final int? indStatusDefault;
-  ConsultaRequest? req;
+  final ConsultaRequest? req;
 
   ListaCemMotoristaView(
       {Key? key, required this.controller, this.indStatusDefault, this.req})
       : super(key: key);
 
   @override
+  State<ListaCemMotoristaView> createState() => _ListaCemMotoristaViewState();
+}
+
+class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
+  late Future<List<SolicitacaoMotorista>> _future;
+  Timer? _autoRefreshTimer;
+  // Rastreia último status de cada corrida para detectar mudanças
+  final Map<int, int> _lastStatuses = {};
+
+  static const _statusLabels = {
+    0: 'aguardando motorista',
+    1: 'aceita por um motoboy',
+    2: 'em andamento',
+    3: 'concluída',
+    4: 'cancelada',
+  };
+
+  @override
+  void initState() {
+    super.initState();
+    _loadData();
+    // Auto-refresh a cada 15s para empresa ver mudanças de status em tempo real
+    _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
+      if (mounted) _loadData();
+    });
+  }
+
+  @override
+  void didUpdateWidget(ListaCemMotoristaView old) {
+    super.didUpdateWidget(old);
+    // Recarrega se filtro de data mudou
+    if (old.req != widget.req || old.indStatusDefault != widget.indStatusDefault) {
+      _loadData();
+    }
+  }
+
+  @override
+  void dispose() {
+    _autoRefreshTimer?.cancel();
+    super.dispose();
+  }
+
+  void _loadData() {
+    final newFuture = widget.controller.buscaListaSolicitacoes(
+        indBuscaChamadosRaio: widget.indStatusDefault ?? -1, req: widget.req);
+
+    // Detecta mudanças de status e notifica
+    newFuture.then((corridas) {
+      if (!mounted) return;
+      for (final c in corridas) {
+        final seq = c.numSeq;
+        final st = c.indStatusCorrida;
+        if (seq == null || st == null) continue;
+        final last = _lastStatuses[seq];
+        if (last != null && last != st) {
+          final label = _statusLabels[st] ?? 'status $st';
+          AdvancedNotificationService.showLocalNotification(
+            title: '🛵 Atualização de corrida',
+            body: 'Corrida #$seq: $label',
+            tipo: 'corrida_aceita',
+            data: {'corridaId': seq.toString()},
+          );
+        }
+        _lastStatuses[seq] = st;
+      }
+    }).catchError((_) {});
+
+    setState(() => _future = newFuture);
+  }
+
+  @override
   Widget build(BuildContext context) {
-    return FutureBuilder<List<SolicitacaoMotorista>>(
-      future: controller.buscaListaSolicitacoes(
-          indBuscaChamadosRaio: indStatusDefault ?? -1, req: req),
+    return RefreshIndicator(
+      onRefresh: () async => _loadData(),
+      child: FutureBuilder<List<SolicitacaoMotorista>>(
+      future: _future,
       builder: (context, snapshot) {
         if (snapshot.hasData) {
           List<SolicitacaoMotorista> data = snapshot.data!;
@@ -198,9 +285,10 @@ class ListaCemMotoristaView extends StatelessWidget {
             final route = ModalRoute.of(context);
             final pageName = route?.settings.name ?? "";
             log(pageName);
-            return _jobsListView(data, controller);
+            return _jobsListView(data, widget.controller);
           } else {
-            return Center(
+            return ListView(children: [
+            Center(
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: <Widget>[
@@ -239,14 +327,16 @@ class ListaCemMotoristaView extends StatelessWidget {
                   ),
                 ],
               ),
-            );
+            ),
+            ]);
           }
         } else if (snapshot.hasError) {
-          return Text("${snapshot.error}");
+          return ListView(children: [Center(child: Text("${snapshot.error}"))]);
         }
-        return CircularProgressIndicator();
+        return const Center(child: CircularProgressIndicator());
       },
-    );
+    ),
+  );
   }
 
   ListView _jobsListView(List<SolicitacaoMotorista> data, controller) {
@@ -344,6 +434,12 @@ class ListaCemMotoristaView extends StatelessWidget {
     }
     subtitleObsEntrega =
         subtitleObsEntrega + ' - R\$ ${amigo.vlrTaxaRestaurante ?? 0}';
+
+    // Badge de Cobrança na Entrega
+    if (amigo.isCod) {
+      subtitleObsEntrega = '💰 Cobrar do cliente: R\$ ${amigo.vlrCobrancaCliente?.toStringAsFixed(2) ?? "?"}'
+          '${amigo.indMaquininha == 1 ? " + 💳 maquininha" : ""}\n$subtitleObsEntrega';
+    }
     return _customListItem(
       IconButton(
           onPressed: () {},
@@ -442,6 +538,20 @@ class ListaCemMotoristaView extends StatelessWidget {
                           'trackedUserId': amigo.codMotorista.toString(),
                           'initialLatitude': initialLat,
                           'initialLongitude': initialLng,
+                          // Pickup (empresa)
+                          'pickupLat': amigo.dbEmpresasByCodEmpresa?.desLatitude,
+                          'pickupLng': amigo.dbEmpresasByCodEmpresa?.desLongitude,
+                          'pickupLabel': amigo.enderecoEmpresa,
+                          // Delivery (cliente)
+                          'deliveryLat': amigo.desLatitudeEntrega,
+                          'deliveryLng': amigo.desLongitudeEntrega,
+                          'deliveryLabel': amigo.desEnderecoEntrega != null
+                              ? '${amigo.desEnderecoEntrega}${amigo.desNumeroEndereco != null ? ', ${amigo.desNumeroEndereco}' : ''}'
+                              : null,
+                          // Motorista
+                          'motoristaName': amigo.dbMotoristasByCodMotorista?.desNomeFantasia
+                              ?? amigo.dbMotoristasByCodMotorista?.desRazaoSocial,
+                          'statusCorrida': amigo.indStatusCorrida,
                         },
                       );
                     } else {
@@ -584,7 +694,21 @@ class ListaCemMotoristaView extends StatelessWidget {
           ],
         ),
       ),
-      SizedBox.shrink(), // custom3 - não usado na nova implementação
+      _EmpresaStatusTimeline(status: amigo.indStatusCorrida ?? 0),
+    );
+  }
+
+  /// Abre tela de pendências CoD para esta corrida específica
+  void _verPendenciasCod(BuildContext context, SolicitacaoMotorista amigo) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => _CodPendenciaEmpresaView(
+          numSeq: amigo.numSeq!,
+          vlrCobranca: amigo.vlrCobrancaCliente ?? 0,
+          codEmpresa: amigo.codEmpresa ?? 0,
+        ),
+      ),
     );
   }
 
@@ -641,6 +765,11 @@ class ListaCemMotoristaView extends StatelessWidget {
               ),
             ],
           ),
+          // Timeline de status (custom3)
+          if (custom3 is! SizedBox) ...[
+            SizedBox(height: 12),
+            custom3,
+          ],
           SizedBox(height: 12),
           Row(
             mainAxisAlignment: MainAxisAlignment.end,
@@ -928,9 +1057,238 @@ class ListaCemMotoristaView extends StatelessWidget {
     // show the dialog
     showDialog(
       context: _context,
+      useRootNavigator: false,
       builder: (BuildContext context) {
         return alert;
       },
+    );
+  }
+}
+
+/// Timeline visual de progresso da corrida — visão empresa
+/// Status Spring Boot: 0=aguardando, 1=aceita, 2=em andamento, 3=concluída, 4=cancelada
+class _EmpresaStatusTimeline extends StatelessWidget {
+  final int status;
+  const _EmpresaStatusTimeline({required this.status});
+
+  static const _red = Color(0xFFE53935);
+  static const _grey = Color(0xFFBDBDBD);
+  static const _green = Color(0xFF43A047);
+
+  static const _icons = [
+    Icons.hourglass_empty_rounded,
+    Icons.check_circle_rounded,
+    Icons.directions_bike_rounded,
+    Icons.done_all_rounded,
+  ];
+  static const _labels = ['Aguardando', 'Aceito', 'A caminho', 'Entregue'];
+
+  @override
+  Widget build(BuildContext context) {
+    // status 4 (cancelada) → mostra em cinza
+    if (status == 4) {
+      return Center(
+        child: Text(
+          '✕ Cancelada',
+          style: GoogleFonts.poppins(fontSize: 11, color: _grey, fontWeight: FontWeight.w600),
+        ),
+      );
+    }
+
+    // Mapeia status Spring Boot → índice do step (0-3)
+    // 0=aguardando→0, 1=aceita→1, 2=em andamento→2, 3=concluída→3
+    final stepIndex = status.clamp(0, 3);
+    final done = status >= 3;
+
+    return Row(
+      children: List.generate(_icons.length * 2 - 1, (i) {
+        if (i.isOdd) {
+          final active = stepIndex > i ~/ 2;
+          return Expanded(
+            child: Container(height: 2, color: active ? _red : _grey.withOpacity(0.4)),
+          );
+        }
+        final idx = i ~/ 2;
+        final isDone = stepIndex > idx;
+        final isCurrent = stepIndex == idx;
+        final isCompleted = done && idx == _icons.length - 1;
+        final color = isCompleted ? _green : (isDone || isCurrent ? _red : _grey.withOpacity(0.3));
+
+        return Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: isCurrent ? 28 : 22,
+              height: isCurrent ? 28 : 22,
+              decoration: BoxDecoration(
+                color: color,
+                shape: BoxShape.circle,
+                boxShadow: isCurrent ? [BoxShadow(color: _red.withOpacity(0.3), blurRadius: 6)] : [],
+              ),
+              child: Icon(
+                _icons[idx],
+                size: isCurrent ? 15 : 12,
+                color: (isDone || isCurrent) ? Colors.white : _grey,
+              ),
+            ),
+            const SizedBox(height: 3),
+            Text(
+              _labels[idx],
+              style: GoogleFonts.poppins(
+                fontSize: 9,
+                fontWeight: isCurrent ? FontWeight.w700 : FontWeight.normal,
+                color: (isDone || isCurrent) ? _red : _grey,
+              ),
+            ),
+          ],
+        );
+      }),
+    );
+  }
+}
+
+/// Mini tela de pendência CoD para a empresa confirmar recebimento da devolução
+class _CodPendenciaEmpresaView extends StatelessWidget {
+  final int numSeq;
+  final double vlrCobranca;
+  final int codEmpresa;
+
+  const _CodPendenciaEmpresaView({
+    required this.numSeq,
+    required this.vlrCobranca,
+    required this.codEmpresa,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: Text(
+          'CoD — Corrida #$numSeq',
+          style: GoogleFonts.poppins(fontSize: 17, fontWeight: FontWeight.w600),
+        ),
+        backgroundColor: Colors.white,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Color(0xFF1A1A1A)),
+      ),
+      body: StreamBuilder<CodDelivery?>(
+        stream: CodService.streamCodDelivery(numSeq),
+        builder: (ctx, snap) {
+          if (!snap.hasData) {
+            return const Center(child: CircularProgressIndicator());
+          }
+          final cod = snap.data;
+          if (cod == null) {
+            return Center(
+              child: Text('Sem cobrança registrada para esta corrida.',
+                  style: GoogleFonts.poppins(color: Colors.grey)),
+            );
+          }
+
+          final fmt = NumberFormat.currency(locale: 'pt_BR', symbol: 'R\$ ');
+
+          return Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Status atual
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: cod.hasPendency ? Colors.orange.shade50 : Colors.green.shade50,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(
+                      color: cod.hasPendency ? Colors.orange.shade300 : Colors.green.shade300,
+                    ),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Status: ${cod.status.label}',
+                          style: GoogleFonts.poppins(
+                              fontSize: 15, fontWeight: FontWeight.w600)),
+                      Text('Valor cobrar: ${fmt.format(cod.vlrCobranca)}',
+                          style: GoogleFonts.poppins(fontSize: 13)),
+                      if (cod.vlrRecebido != null)
+                        Text('Recebido: ${fmt.format(cod.vlrRecebido!)}',
+                            style: GoogleFonts.poppins(fontSize: 13)),
+                      if (cod.hasPendency)
+                        Text(
+                          'Pendente: ${fmt.format(cod.vlrPendente)}',
+                          style: GoogleFonts.poppins(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.orange.shade800),
+                        ),
+                    ],
+                  ),
+                ),
+
+                const SizedBox(height: 16),
+
+                // Pendências abertas
+                StreamBuilder<List<PendenciaMotorista>>(
+                  stream: CodService.streamPendenciasEmpresa(codEmpresa),
+                  builder: (_, pendSnap) {
+                    final pends = (pendSnap.data ?? [])
+                        .where((p) => p.numSeq == numSeq)
+                        .toList();
+                    if (pends.isEmpty) return const SizedBox.shrink();
+
+                    return Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Pendências',
+                            style: GoogleFonts.poppins(
+                                fontSize: 14, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 8),
+                        ...pends.map((p) => Card(
+                          child: ListTile(
+                            leading: Icon(
+                              p.isResolvida ? Icons.check_circle_rounded : Icons.warning_rounded,
+                              color: p.isResolvida ? Colors.green : Colors.orange,
+                            ),
+                            title: Text(fmt.format(p.vlrPendente),
+                                style: GoogleFonts.poppins(fontWeight: FontWeight.bold)),
+                            subtitle: Text(p.statusLabel),
+                            trailing: p.isAberta
+                                ? ElevatedButton(
+                                    onPressed: () async {
+                                      await CodService.resolverPendencia(
+                                        pendenciaId: p.id,
+                                        numSeq: numSeq,
+                                        vlrDevolvido: p.vlrPendente,
+                                        adminOrEmpresaName: 'Empresa',
+                                      );
+                                      if (context.mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(
+                                          const SnackBar(
+                                            content: Text('Devolução confirmada!'),
+                                            backgroundColor: Colors.green,
+                                          ),
+                                        );
+                                      }
+                                    },
+                                    style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.green),
+                                    child: Text('Confirmar',
+                                        style: GoogleFonts.poppins(
+                                            fontSize: 12, color: Colors.white)),
+                                  )
+                                : null,
+                          ),
+                        )),
+                      ],
+                    );
+                  },
+                ),
+              ],
+            ),
+          );
+        },
+      ),
     );
   }
 }

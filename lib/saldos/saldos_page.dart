@@ -427,14 +427,15 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
         if (indTipo != null && indTipo == 2) {
           await _userService.realizaRecebimentoEstabelecimento(
               saldo.corridaList ?? "",
-              widget.userConsulta!.usuarioResp!.empresas!.first.codEmpresa ??
-                  -1);
+              (widget.userConsulta!.usuarioResp?.empresas?.isNotEmpty == true)
+                  ? widget.userConsulta!.usuarioResp!.empresas!.first.codEmpresa ?? -1
+                  : -1);
         } else {
           await _userService.realizaPagamentoMotorista(
               saldo.corridaList ?? "",
-              widget.userConsulta!.usuarioResp!.motoristas!.first
-                      .codMotorista ??
-                  -1);
+              (widget.userConsulta!.usuarioResp?.motoristas?.isNotEmpty == true)
+                  ? widget.userConsulta!.usuarioResp!.motoristas!.first.codMotorista ?? -1
+                  : -1);
         }
         Navigator.of(_context).pop();
         setState(() {});
@@ -466,11 +467,15 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
     var userNew = ApiBaseHelper.userSessao;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux = userNew!.usuarioResp!.motoristas!.first.codMotorista;
+      codMotAux = (userNew?.usuarioResp?.motoristas?.isNotEmpty == true)
+          ? userNew!.usuarioResp!.motoristas!.first.codMotorista
+          : null;
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux = userNew!.usuarioResp!.empresas!.first.codEmpresa;
+      codEmAux = (userNew?.usuarioResp?.empresas?.isNotEmpty == true)
+          ? userNew!.usuarioResp!.empresas!.first.codEmpresa
+          : null;
     }
 
     return FutureBuilder<List<SaldosCorrida>>(

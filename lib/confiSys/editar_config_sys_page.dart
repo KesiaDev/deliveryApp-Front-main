@@ -42,18 +42,24 @@ class _EditarCadastroPage extends State<EditarConfigSysPage> {
 
   _onClickCadastro(BuildContext context) {
     if (_formKey.currentState!.validate()) {
-      // Usa seq se existir, senão usa 1 como padrão
-      _controler.setSeq(widget.usuarioEdicao.seq ?? 1);
-      _controler
-          .setVlrKmRodado(double.parse(_vlrKmRodado.text.replaceAll(',', '.')));
-      _controler.setVlrPercentualDescontoMotorista(double.parse(
-          _vlrPercentualDescontoMotorista.text.replaceAll(',', '.')));
-      _controler
-          .setVlrTaxaApp(double.parse(_vlrTaxaApp.text.replaceAll(',', '.')));
-      _controler.setRaioBuscaCorridas(int.parse(_raioBuscaCorridas.text));
+      try {
+        // Usa seq se existir, senão usa 1 como padrão
+        _controler.setSeq(widget.usuarioEdicao.seq ?? 1);
+        _controler.setVlrKmRodado(
+            double.parse(_vlrKmRodado.text.replaceAll(',', '.')));
+        _controler.setVlrPercentualDescontoMotorista(double.parse(
+            _vlrPercentualDescontoMotorista.text.replaceAll(',', '.')));
+        _controler.setVlrTaxaApp(
+            double.parse(_vlrTaxaApp.text.replaceAll(',', '.')));
+        _controler.setRaioBuscaCorridas(int.parse(_raioBuscaCorridas.text));
 
-      //Colocar aqui chamada da API
-      _controler.atualizarConfigSys();
+        //Colocar aqui chamada da API
+        _controler.atualizarConfigSys();
+      } catch (e) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Valor inválido. Use apenas números.')),
+        );
+      }
     }
   }
 

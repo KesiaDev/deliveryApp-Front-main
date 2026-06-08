@@ -173,19 +173,22 @@ class EditarCadastroController {
       }
       
       // Usa atualizaUsuario que envia o usuarioResp completo
+      final senhaAtual = usuarioAtual.usuarioResp?.senha;
+      final senhaFinal = senha.isNotEmpty ? senha : senhaAtual;
+
       final usuarioUpdate = Usuario(
         desNome: nome,
-        desSenha: senha,
+        desSenha: senha.isNotEmpty ? senha : null, // Não envia senha vazia
         indTipo: 1,
         usuario: email,
         usuarioResp: usuarioRespAtual,
       );
-      
+
       usuarioUpdate.usuarioResp!.codUsuario = usuarioAtual.codUsuario;
       usuarioUpdate.usuarioResp!.dataCriacao = usuarioAtual.dataCriacao;
       usuarioUpdate.usuarioResp!.indOffline = usuarioAtual.usuarioResp?.indOffline;
-      usuarioUpdate.usuarioResp!.senha = usuarioAtual.usuarioResp?.senha;
-      
+      usuarioUpdate.usuarioResp!.senha = senhaFinal; // Sempre preserva senha atual
+
       if (senha.isNotEmpty) {
         usuarioUpdate.usuarioResp!.reSenha = senha;
         usuarioUpdate.usuarioResp!.senha = senha;

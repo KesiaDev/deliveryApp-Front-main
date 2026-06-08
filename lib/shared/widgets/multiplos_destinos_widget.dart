@@ -3,7 +3,10 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:delivery_front/shared/models/destino_corrida.dart';
 import 'package:geocoding/geocoding.dart';
 
-/// Widget para gerenciar múltiplos destinos em uma corrida
+/// Widget moderno para múltiplas paradas — estilo Rappi/iFood
+/// - Drag & drop para reordenar
+/// - Auto-geocodificação ao sair do campo
+/// - Timeline visual (bolinha + linha vertical)
 class MultiplosDestinosWidget extends StatefulWidget {
   final List<DestinoCorrida> destinos;
   final Function(List<DestinoCorrida>) onDestinosChanged;
@@ -17,7 +20,8 @@ class MultiplosDestinosWidget extends StatefulWidget {
   }) : super(key: key);
 
   @override
-  State<MultiplosDestinosWidget> createState() => _MultiplosDestinosWidgetState();
+  State<MultiplosDestinosWidget> createState() =>
+      _MultiplosDestinosWidgetState();
 }
 
 class _MultiplosDestinosWidgetState extends State<MultiplosDestinosWidget> {
@@ -27,7 +31,6 @@ class _MultiplosDestinosWidgetState extends State<MultiplosDestinosWidget> {
   void initState() {
     super.initState();
     _destinos = List.from(widget.destinos);
-    // Se não houver destinos, cria um inicial
     if (_destinos.isEmpty) {
       _destinos.add(DestinoCorrida(ordem: 1));
     }
@@ -39,19 +42,12 @@ class _MultiplosDestinosWidgetState extends State<MultiplosDestinosWidget> {
         id: DateTime.now().millisecondsSinceEpoch.toString(),
         ordem: _destinos.length + 1,
       ));
-      _atualizarOrdem();
       widget.onDestinosChanged(_destinos);
     });
   }
 
   void _removerDestino(int index) {
-    if (_destinos.length <= 1) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('É necessário ter pelo menos um destino')),
-      );
-      return;
-    }
-
+    if (_destinos.length <= 1) return;
     setState(() {
       _destinos.removeAt(index);
       _atualizarOrdem();
@@ -65,18 +61,6 @@ class _MultiplosDestinosWidgetState extends State<MultiplosDestinosWidget> {
     }
   }
 
-  void _moverDestino(int oldIndex, int newIndex) {
-    if (newIndex > oldIndex) {
-      newIndex -= 1;
-    }
-    setState(() {
-      final item = _destinos.removeAt(oldIndex);
-      _destinos.insert(newIndex, item);
-      _atualizarOrdem();
-      widget.onDestinosChanged(_destinos);
-    });
-  }
-
   void _atualizarDestino(int index, DestinoCorrida destino) {
     setState(() {
       _destinos[index] = destino;
@@ -86,122 +70,118 @@ class _MultiplosDestinosWidgetState extends State<MultiplosDestinosWidget> {
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.grey[50],
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: Colors.grey[300]!),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        // Header
+        Padding(
+          padding: const EdgeInsets.only(bottom: 4),
+          child: Row(
             children: [
-              Icon(Icons.location_on, color: Colors.red, size: 20),
-              SizedBox(width: 8),
+              const Icon(Icons.route_rounded, color: Color(0xFFE53935), size: 18),
+              const SizedBox(width: 6),
               Text(
-                'Destinos de Entrega',
+                'Paradas de entrega',
                 style: GoogleFonts.poppins(
-                  fontSize: 16,
+                  fontSize: 14,
                   fontWeight: FontWeight.w600,
-                  color: Colors.black87,
+                  color: const Color(0xFF1A1A1A),
                 ),
               ),
-              Spacer(),
-              if (widget.enabled)
-                TextButton.icon(
-                  onPressed: _adicionarDestino,
-                  icon: Icon(Icons.add, size: 18, color: Colors.red),
-                  label: Text(
-                    'Adicionar',
-                    style: GoogleFonts.poppins(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.red,
-                    ),
-                  ),
-                ),
             ],
           ),
-          SizedBox(height: 12),
-          if (_destinos.length > 1)
-            Container(
-              padding: EdgeInsets.all(12),
-              decoration: BoxDecoration(
-                color: Colors.blue.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+        ),
+        // Lista de destinos (Column simples — ReorderableListView não funciona dentro de dialog)
+        Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (int i = 0; i < _destinos.length; i++)
+              _DestinoCard(
+                key: ValueKey(_destinos[i].id ?? 'destino_$i'),
+                destino: _destinos[i],
+                index: i,
+                isFirst: i == 0,
+                isLast: i == _destinos.length - 1,
+                total: _destinos.length,
+                enabled: widget.enabled,
+                onChanged: (d) => _atualizarDestino(i, d),
+                onRemoved: () => _removerDestino(i),
               ),
-              child: Row(
-                children: [
-                  Icon(Icons.info_outline, size: 16, color: Colors.blue),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'A ordem dos destinos define a sequência de entregas',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.blue[900],
-                      ),
-                    ),
-                  ),
-                ],
+          ],
+        ),
+        // Botão adicionar parada
+        if (widget.enabled) ...[
+          const SizedBox(height: 8),
+          SizedBox(
+            width: double.infinity,
+            child: OutlinedButton.icon(
+              onPressed: _adicionarDestino,
+              icon: const Icon(Icons.add_location_alt_outlined,
+                  color: Color(0xFFE53935), size: 18),
+              label: Text(
+                '+ Adicionar parada',
+                style: GoogleFonts.poppins(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                  color: const Color(0xFFE53935),
+                ),
+              ),
+              style: OutlinedButton.styleFrom(
+                side: const BorderSide(color: Color(0xFFE53935)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                padding: const EdgeInsets.symmetric(vertical: 10),
               ),
             ),
-          SizedBox(height: 12),
-          ...List.generate(_destinos.length, (index) {
-            return _DestinoItem(
-              destino: _destinos[index],
-              index: index,
-              total: _destinos.length,
-              enabled: widget.enabled,
-              onChanged: (destino) => _atualizarDestino(index, destino),
-              onRemoved: () => _removerDestino(index),
-              onMoveUp: index > 0 ? () => _moverDestino(index, index - 1) : null,
-              onMoveDown: index < _destinos.length - 1
-                  ? () => _moverDestino(index, index + 1)
-                  : null,
-            );
-          }),
+          ),
         ],
-      ),
+      ],
     );
   }
 }
 
-class _DestinoItem extends StatefulWidget {
+// ─────────────────────────────────────────────────────────────────────────────
+// Card individual de destino
+// ─────────────────────────────────────────────────────────────────────────────
+class _DestinoCard extends StatefulWidget {
   final DestinoCorrida destino;
   final int index;
+  final bool isFirst;
+  final bool isLast;
   final int total;
   final bool enabled;
   final Function(DestinoCorrida) onChanged;
   final VoidCallback onRemoved;
-  final VoidCallback? onMoveUp;
-  final VoidCallback? onMoveDown;
 
-  const _DestinoItem({
+  const _DestinoCard({
     Key? key,
     required this.destino,
     required this.index,
+    required this.isFirst,
+    required this.isLast,
     required this.total,
     required this.enabled,
     required this.onChanged,
     required this.onRemoved,
-    this.onMoveUp,
-    this.onMoveDown,
   }) : super(key: key);
 
   @override
-  State<_DestinoItem> createState() => _DestinoItemState();
+  State<_DestinoCard> createState() => _DestinoCardState();
 }
 
-class _DestinoItemState extends State<_DestinoItem> {
-  final TextEditingController _enderecoController = TextEditingController();
-  final TextEditingController _numeroController = TextEditingController();
-  final TextEditingController _complementoController = TextEditingController();
-  final TextEditingController _telefoneController = TextEditingController();
-  final TextEditingController _obsController = TextEditingController();
-  bool _buscandoCoordenadas = false;
+class _DestinoCardState extends State<_DestinoCard> {
+  final _enderecoController = TextEditingController();
+  final _numeroController = TextEditingController();
+  final _complementoController = TextEditingController();
+  final _telefoneController = TextEditingController();
+  final _obsController = TextEditingController();
+
+  final _enderecoFocus = FocusNode();
+
+  bool _geocodificando = false;
+  bool _expandido = false;
 
   @override
   void initState() {
@@ -211,6 +191,16 @@ class _DestinoItemState extends State<_DestinoItem> {
     _complementoController.text = widget.destino.desComplemento ?? '';
     _telefoneController.text = widget.destino.desTelefone ?? '';
     _obsController.text = widget.destino.desObsEntrega ?? '';
+
+    // Auto-geocodificação ao sair do campo
+    _enderecoFocus.addListener(() {
+      if (!_enderecoFocus.hasFocus) {
+        _autoGeocodificar();
+      }
+    });
+
+    // Expandir automaticamente se destino ainda não tem endereço
+    _expandido = widget.destino.desEnderecoEntrega?.isEmpty ?? true;
   }
 
   @override
@@ -220,106 +210,81 @@ class _DestinoItemState extends State<_DestinoItem> {
     _complementoController.dispose();
     _telefoneController.dispose();
     _obsController.dispose();
+    _enderecoFocus.dispose();
     super.dispose();
   }
 
-  Future<void> _buscarCoordenadas() async {
+  Future<void> _autoGeocodificar() async {
     final endereco = _enderecoController.text.trim();
     final numero = _numeroController.text.trim();
+    if (endereco.isEmpty) return;
+    // Já tem coordenadas para esse mesmo endereço? Não refaz
+    if (widget.destino.desLatitudeEntrega != null &&
+        widget.destino.desEnderecoEntrega == endereco) return;
 
-    if (endereco.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Digite o endereço primeiro')),
-      );
-      return;
-    }
-
-    setState(() {
-      _buscandoCoordenadas = true;
-    });
+    if (!mounted) return;
+    setState(() => _geocodificando = true);
 
     try {
-      final enderecoCompleto = numero.isNotEmpty
-          ? '$endereco, $numero'
-          : endereco;
-      
-      final locations = await locationFromAddress(enderecoCompleto);
-      
+      final query = numero.isNotEmpty ? '$endereco, $numero' : endereco;
+      final locations = await locationFromAddress(query);
+      if (!mounted) return;
       if (locations.isNotEmpty) {
-        final location = locations.first;
-        widget.onChanged(
-          widget.destino.copyWith(
-            desLatitudeEntrega: location.latitude,
-            desLongitudeEntrega: location.longitude,
-          ),
-        );
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Coordenadas encontradas!'),
-            backgroundColor: Colors.green,
-          ),
-        );
-      } else {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Endereço não encontrado')),
-        );
+        widget.onChanged(widget.destino.copyWith(
+          desEnderecoEntrega: endereco,
+          desNumeroEndereco: numero,
+          desLatitudeEntrega: locations.first.latitude,
+          desLongitudeEntrega: locations.first.longitude,
+        ));
       }
-    } catch (e) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Erro ao buscar coordenadas: $e')),
-      );
+    } catch (_) {
+      // silencioso — coordenadas são opcionais
     } finally {
-      setState(() {
-        _buscandoCoordenadas = false;
-      });
+      if (mounted) setState(() => _geocodificando = false);
     }
   }
 
-  void _atualizarDestino() {
-    widget.onChanged(
-      widget.destino.copyWith(
-        desEnderecoEntrega: _enderecoController.text.trim(),
-        desNumeroEndereco: _numeroController.text.trim(),
-        desComplemento: _complementoController.text.trim(),
-        desTelefone: _telefoneController.text.trim(),
-        desObsEntrega: _obsController.text.trim(),
-      ),
-    );
+  void _salvar() {
+    widget.onChanged(widget.destino.copyWith(
+      desEnderecoEntrega: _enderecoController.text.trim(),
+      desNumeroEndereco: _numeroController.text.trim(),
+      desComplemento: _complementoController.text.trim(),
+      desTelefone: _telefoneController.text.trim(),
+      desObsEntrega: _obsController.text.trim(),
+    ));
   }
+
+  Color get _dotColor =>
+      widget.isFirst ? const Color(0xFF43A047) : const Color(0xFFE53935);
 
   @override
   Widget build(BuildContext context) {
-    return Container(
-      margin: EdgeInsets.only(bottom: 12),
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: Colors.white,
-        borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: widget.destino.isCompleto
-              ? Colors.green.withOpacity(0.3)
-              : Colors.grey[300]!,
-          width: 1.5,
-        ),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
-      ),
-      child: Column(
+    final temEndereco = _enderecoController.text.isNotEmpty;
+    final temCoordenadas = widget.destino.desLatitudeEntrega != null;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Row(
+          // Timeline visual
+          Column(
             children: [
+              const SizedBox(height: 14),
+              // Bolinha
               Container(
-                width: 32,
-                height: 32,
+                width: 28,
+                height: 28,
                 decoration: BoxDecoration(
-                  color: Colors.red,
+                  color: _dotColor,
                   shape: BoxShape.circle,
+                  boxShadow: [
+                    BoxShadow(
+                      color: _dotColor.withOpacity(0.3),
+                      blurRadius: 6,
+                      offset: const Offset(0, 2),
+                    ),
+                  ],
                 ),
                 child: Center(
                   child: Text(
@@ -327,172 +292,251 @@ class _DestinoItemState extends State<_DestinoItem> {
                     style: GoogleFonts.poppins(
                       color: Colors.white,
                       fontWeight: FontWeight.bold,
-                      fontSize: 14,
+                      fontSize: 12,
                     ),
                   ),
                 ),
               ),
-              SizedBox(width: 12),
-              Expanded(
-                child: Text(
-                  'Destino ${widget.destino.ordem}',
-                  style: GoogleFonts.poppins(
-                    fontSize: 16,
-                    fontWeight: FontWeight.w600,
-                  ),
-                ),
-              ),
-              if (widget.enabled) ...[
-                if (widget.onMoveUp != null)
-                  IconButton(
-                    icon: Icon(Icons.arrow_upward, size: 20),
-                    onPressed: widget.onMoveUp,
-                    tooltip: 'Mover para cima',
-                  ),
-                if (widget.onMoveDown != null)
-                  IconButton(
-                    icon: Icon(Icons.arrow_downward, size: 20),
-                    onPressed: widget.onMoveDown,
-                    tooltip: 'Mover para baixo',
-                  ),
-                IconButton(
-                  icon: Icon(Icons.delete, color: Colors.red, size: 20),
-                  onPressed: widget.total > 1 ? widget.onRemoved : null,
-                  tooltip: 'Remover destino',
-                ),
-              ],
-            ],
-          ),
-          SizedBox(height: 16),
-          TextField(
-            controller: _enderecoController,
-            enabled: widget.enabled,
-            decoration: InputDecoration(
-              labelText: 'Endereço *',
-              hintText: 'Rua, Avenida, etc.',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              prefixIcon: Icon(Icons.location_on),
-            ),
-            onChanged: (_) => _atualizarDestino(),
-          ),
-          SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                flex: 2,
-                child: TextField(
-                  controller: _numeroController,
-                  enabled: widget.enabled,
-                  decoration: InputDecoration(
-                    labelText: 'Número',
-                    hintText: '123',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+              // Linha de conexão (exceto último)
+              if (!widget.isLast)
+                Container(
+                  width: 2,
+                  height: 48,
+                  margin: const EdgeInsets.symmetric(vertical: 2),
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topCenter,
+                      end: Alignment.bottomCenter,
+                      colors: [_dotColor, const Color(0xFFE53935)],
                     ),
-                  ),
-                  onChanged: (_) => _atualizarDestino(),
-                ),
-              ),
-              SizedBox(width: 12),
-              Expanded(
-                flex: 3,
-                child: TextField(
-                  controller: _complementoController,
-                  enabled: widget.enabled,
-                  decoration: InputDecoration(
-                    labelText: 'Complemento',
-                    hintText: 'Apto, Bloco, etc.',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onChanged: (_) => _atualizarDestino(),
-                ),
-              ),
-            ],
-          ),
-          SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: TextField(
-                  controller: _telefoneController,
-                  enabled: widget.enabled,
-                  decoration: InputDecoration(
-                    labelText: 'Telefone',
-                    hintText: '(11) 99999-9999',
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    prefixIcon: Icon(Icons.phone),
-                  ),
-                  onChanged: (_) => _atualizarDestino(),
-                ),
-              ),
-              SizedBox(width: 12),
-              if (widget.enabled)
-                ElevatedButton.icon(
-                  onPressed: _buscandoCoordenadas ? null : _buscarCoordenadas,
-                  icon: _buscandoCoordenadas
-                      ? SizedBox(
-                          width: 16,
-                          height: 16,
-                          child: CircularProgressIndicator(
-                            strokeWidth: 2,
-                            valueColor: AlwaysStoppedAnimation<Color>(Colors.white),
-                          ),
-                        )
-                      : Icon(Icons.search, size: 18),
-                  label: Text('Buscar'),
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: Colors.red,
-                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                   ),
                 ),
             ],
           ),
-          if (widget.destino.desLatitudeEntrega != null &&
-              widget.destino.desLongitudeEntrega != null) ...[
-            SizedBox(height: 8),
-            Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.green.withOpacity(0.1),
-                borderRadius: BorderRadius.circular(8),
+          const SizedBox(width: 10),
+          // Card do destino
+          Expanded(
+            child: Card(
+              margin: EdgeInsets.zero,
+              elevation: 0,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(12),
+                side: BorderSide(
+                  color: temCoordenadas
+                      ? const Color(0xFF43A047).withOpacity(0.4)
+                      : Colors.grey.shade300,
+                  width: 1.2,
+                ),
               ),
-              child: Row(
+              child: Column(
                 children: [
-                  Icon(Icons.check_circle, size: 16, color: Colors.green),
-                  SizedBox(width: 8),
-                  Expanded(
-                    child: Text(
-                      'Coordenadas: ${widget.destino.desLatitudeEntrega!.toStringAsFixed(6)}, ${widget.destino.desLongitudeEntrega!.toStringAsFixed(6)}',
-                      style: GoogleFonts.poppins(
-                        fontSize: 12,
-                        color: Colors.green[900],
+                  // Cabeçalho clicável
+                  InkWell(
+                    onTap: () => setState(() => _expandido = !_expandido),
+                    borderRadius: BorderRadius.circular(12),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 10),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  widget.isFirst ? 'Entrega principal' : 'Parada ${widget.destino.ordem}',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w600,
+                                    color: Colors.grey.shade600,
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  temEndereco
+                                      ? _enderecoController.text
+                                      : 'Toque para preencher o endereço',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 13,
+                                    color: temEndereco
+                                        ? const Color(0xFF1A1A1A)
+                                        : Colors.grey.shade400,
+                                    fontStyle: temEndereco
+                                        ? FontStyle.normal
+                                        : FontStyle.italic,
+                                  ),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          // Indicador de coordenadas
+                          if (_geocodificando)
+                            const SizedBox(
+                              width: 14,
+                              height: 14,
+                              child: CircularProgressIndicator(
+                                strokeWidth: 2,
+                                color: Color(0xFFE53935),
+                              ),
+                            )
+                          else if (temCoordenadas)
+                            const Icon(Icons.check_circle,
+                                size: 16, color: Color(0xFF43A047))
+                          else if (temEndereco)
+                            const Icon(Icons.location_searching,
+                                size: 16, color: Colors.orange),
+                          if (widget.enabled) ...[
+                            const SizedBox(width: 4),
+                            const Icon(Icons.drag_handle_rounded,
+                                color: Colors.grey, size: 20),
+                          ],
+                        ],
                       ),
                     ),
                   ),
+                  // Campos expandidos
+                  if (_expandido) ...[
+                    const Divider(height: 1),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(12, 10, 12, 12),
+                      child: Column(
+                        children: [
+                          // Endereço
+                          TextFormField(
+                            controller: _enderecoController,
+                            focusNode: _enderecoFocus,
+                            enabled: widget.enabled,
+                            style: GoogleFonts.poppins(fontSize: 13),
+                            decoration: InputDecoration(
+                              labelText: 'Endereço *',
+                              labelStyle: GoogleFonts.poppins(fontSize: 13),
+                              hintText: 'Rua, Avenida, etc.',
+                              prefixIcon: const Icon(Icons.location_on_outlined,
+                                  size: 18),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 12),
+                            ),
+                            onChanged: (_) => _salvar(),
+                          ),
+                          const SizedBox(height: 8),
+                          // Número + Complemento
+                          Row(
+                            children: [
+                              Expanded(
+                                flex: 2,
+                                child: TextFormField(
+                                  controller: _numeroController,
+                                  enabled: widget.enabled,
+                                  style: GoogleFonts.poppins(fontSize: 13),
+                                  decoration: InputDecoration(
+                                    labelText: 'Nº',
+                                    labelStyle:
+                                        GoogleFonts.poppins(fontSize: 13),
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        vertical: 10, horizontal: 12),
+                                  ),
+                                  onChanged: (_) => _salvar(),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              Expanded(
+                                flex: 4,
+                                child: TextFormField(
+                                  controller: _complementoController,
+                                  enabled: widget.enabled,
+                                  style: GoogleFonts.poppins(fontSize: 13),
+                                  decoration: InputDecoration(
+                                    labelText: 'Complemento',
+                                    labelStyle:
+                                        GoogleFonts.poppins(fontSize: 13),
+                                    hintText: 'Apto, Bloco…',
+                                    border: OutlineInputBorder(
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    contentPadding: const EdgeInsets.symmetric(
+                                        vertical: 10, horizontal: 12),
+                                  ),
+                                  onChanged: (_) => _salvar(),
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          // Telefone
+                          TextFormField(
+                            controller: _telefoneController,
+                            enabled: widget.enabled,
+                            keyboardType: TextInputType.phone,
+                            style: GoogleFonts.poppins(fontSize: 13),
+                            decoration: InputDecoration(
+                              labelText: 'Telefone do destinatário',
+                              labelStyle: GoogleFonts.poppins(fontSize: 13),
+                              prefixIcon: const Icon(Icons.phone_outlined,
+                                  size: 18),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 12),
+                            ),
+                            onChanged: (_) => _salvar(),
+                          ),
+                          const SizedBox(height: 8),
+                          // Observações
+                          TextFormField(
+                            controller: _obsController,
+                            enabled: widget.enabled,
+                            style: GoogleFonts.poppins(fontSize: 13),
+                            decoration: InputDecoration(
+                              labelText: 'Observação',
+                              labelStyle: GoogleFonts.poppins(fontSize: 13),
+                              hintText: 'Deixar na portaria, ligar antes…',
+                              prefixIcon: const Icon(Icons.note_outlined,
+                                  size: 18),
+                              border: OutlineInputBorder(
+                                borderRadius: BorderRadius.circular(8),
+                              ),
+                              contentPadding: const EdgeInsets.symmetric(
+                                  vertical: 10, horizontal: 12),
+                            ),
+                            maxLines: 2,
+                            onChanged: (_) => _salvar(),
+                          ),
+                          // Botão remover (destinos extras)
+                          if (widget.enabled && widget.total > 1) ...[
+                            const SizedBox(height: 8),
+                            Align(
+                              alignment: Alignment.centerRight,
+                              child: TextButton.icon(
+                                onPressed: widget.onRemoved,
+                                icon: const Icon(Icons.delete_outline,
+                                    size: 16, color: Colors.red),
+                                label: Text(
+                                  'Remover parada',
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 12,
+                                    color: Colors.red,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
                 ],
               ),
             ),
-          ],
-          SizedBox(height: 12),
-          TextField(
-            controller: _obsController,
-            enabled: widget.enabled,
-            decoration: InputDecoration(
-              labelText: 'Observações',
-              hintText: 'Informações adicionais sobre este destino',
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-              ),
-              prefixIcon: Icon(Icons.note),
-            ),
-            maxLines: 2,
-            onChanged: (_) => _atualizarDestino(),
           ),
         ],
       ),

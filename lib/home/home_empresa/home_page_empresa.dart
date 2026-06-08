@@ -2,9 +2,11 @@ import 'dart:io';
 
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
+import 'package:delivery_front/core/app_session.dart';
 import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
 import 'package:delivery_front/empresa/corridas/sol_nova_corrida_page.dart';
+import 'package:delivery_front/modules/monitoring/screens/delivery_request_screen.dart';
 import 'package:delivery_front/home/widgets/task_column.dart';
 import 'package:delivery_front/shared/models/DadosCorrida.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
@@ -117,17 +119,14 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
   Widget build(BuildContext context) {
     //dadosCorrida = await _userService.buscaDadosCorrida(user.usuarioResp!.empresas?.first.codEmpresa);
     return PopScope(
-      canPop: Navigator.canPop(context),
+      canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
         if (!didPop) {
-          final backResult = await _onBackPressed();
-          if (backResult == true && context.mounted) {
-            Navigator.of(context).pop();
-          }
+          await _onBackPressed();
         }
       },
-      child: MaterialApp(
-        theme: ThemeData(
+      child: Theme(
+        data: ThemeData(
           primarySwatch: AppColors.primaryBlack,
           hintColor: Colors.black,
           appBarTheme: AppBarTheme(
@@ -146,7 +145,7 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                 displayColor: Colors.black,
               ),
         ),
-        home: Scaffold(
+        child: Scaffold(
             backgroundColor: backgroundColor,
             appBar: AppBar(
               title: Text(
@@ -226,43 +225,44 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                     },
                   ),
                 ),
-                // Botão Nova Corrida na AppBar (moderno) - ajustado para não sobrepor
+                // Botão Solicitar Entrega (novo fluxo ao vivo)
                 Padding(
                   padding: EdgeInsets.only(right: 8),
-                  child: TextButton.icon(
+                  child: ElevatedButton.icon(
                     onPressed: () {
                       if (!mounted) return;
-                      WidgetsBinding.instance.addPostFrameCallback((_) {
-                        if (mounted) {
-                          if (user.usuarioResp?.indBloqueado == 1) {
-                            context.showInfoBar(
-                              duration: Duration(seconds: 8),
-                              content: Text(
-                                  "Não será possível iniciar corrida, novas solicitações estão bloqueadas."),
-                            );
-                          } else {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                  builder: (context) => SolNovaCorridaPage()),
-                            );
-                          }
-                        }
-                      });
+                      if (user.usuarioResp?.indBloqueado == 1) {
+                        context.showInfoBar(
+                          duration: Duration(seconds: 8),
+                          content: Text(
+                              "Não será possível iniciar corrida, novas solicitações estão bloqueadas."),
+                        );
+                        return;
+                      }
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (_) => DeliveryRequestScreen(user: user),
+                        ),
+                      );
                     },
-                    icon: Icon(Icons.add, size: 18, color: Colors.red),
+                    icon: Icon(Icons.motorcycle_rounded, size: 18),
                     label: Text(
-                      'Nova corrida',
+                      'Solicitar',
                       style: GoogleFonts.poppins(
                         fontSize: 13,
                         fontWeight: FontWeight.w600,
-                        color: Colors.red,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
                     ),
-                    style: TextButton.styleFrom(
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: Color(0xFFE53935),
+                      foregroundColor: Colors.white,
+                      elevation: 0,
                       padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(10)),
                     ),
                   ),
                 ),
@@ -455,38 +455,6 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                             if (!mounted) return;
                             Navigator.pop(context);
                           })),
-                  Visibility(
-                    visible: user.indTipo == 1 ? false : false,
-                    child: ListTile(
-                        leading: Icon(Icons.star_outline, color: iconColor),
-                        title: Text(
-                          "Guardiões do bem",
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: textPrimary,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Meus Guardiões",
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: textSecondary,
-                          ),
-                        ),
-                        trailing: Icon(Icons.chevron_right, color: iconColor),
-                        onTap: () {
-                          // Navigator.pushReplacement(
-                          //   context,
-                          //   MaterialPageRoute(builder: (context) => HomePage()),
-                          // );
-
-                          // Navigator.push(
-                          //     context,
-                          //     new MaterialPageRoute(
-                          //         builder: (context) => ListaCemMotoristaPage()));
-                        }),
-                  ),
                   ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       leading: Container(
@@ -565,7 +533,9 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                           if (mounted) {
                             int? codEmpresa;
                             if (user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA) {
-                              codEmpresa = user.usuarioResp?.empresas?.first.codEmpresa;
+                              codEmpresa = (user.usuarioResp?.empresas?.isNotEmpty == true)
+                                  ? user.usuarioResp!.empresas!.first.codEmpresa
+                                  : null;
                             }
                             Navigator.pushNamed(
                               context,
@@ -659,37 +629,6 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                           }
                         });
                       }),
-                  Divider(height: 1, color: backgroundColor),
-                  Visibility(
-                    visible: user.indTipo == 1 ? false : false,
-                    child: ListTile(
-                        leading: Icon(Icons.contact_phone_outlined, color: iconColor),
-                        title: Text(
-                          "Números úteis",
-                          style: GoogleFonts.poppins(
-                            fontSize: 16,
-                            fontWeight: FontWeight.w500,
-                            color: textPrimary,
-                          ),
-                        ),
-                        subtitle: Text(
-                          "Ligações de Emergência",
-                          style: GoogleFonts.poppins(
-                            fontSize: 14,
-                            color: textSecondary,
-                          ),
-                        ),
-                        trailing: Icon(Icons.chevron_right, color: iconColor),
-                        onTap: () {
-                          //Navigator.pop(context);
-
-                          // Navigator.push(
-                          //     context,
-                          //     new MaterialPageRoute(
-                          //         builder: (context) =>
-                          //             ContatosEmergenciaPage()));
-                        }),
-                  ),
                   ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       leading: Container(
@@ -710,35 +649,8 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                         ),
                       ),
                       onTap: () {
-                        Navigator.pop(context);
-                        showDialog(
-                          context: context,
-                          builder: (BuildContext context) {
-                            return AlertDialog(
-                              title: Text("Confirmar"),
-                              content: Text("Deseja realmente sair?"),
-                              actions: [
-                                TextButton(
-                                  child: Text("Cancelar"),
-                                  onPressed: () => Navigator.of(context).pop(),
-                                ),
-                                TextButton(
-                                  child: Text("Sair", style: TextStyle(color: Colors.red)),
-                                  onPressed: () async {
-                                    Navigator.of(context).pop();
-                                    await _userService.logoffLocalDB();
-                                    if (mounted) {
-                                      Navigator.of(context).pushNamedAndRemoveUntil(
-                                        AppRoutes.splash,
-                                        (Route<dynamic> route) => false,
-                                      );
-                                    }
-                                  },
-                                ),
-                              ],
-                            );
-                          },
-                        );
+                        Navigator.pop(context); // fecha drawer
+                        AppSession.logoutComConfirmacao(context);
                       }),
                   SizedBox(height: 24.0),
                 ],
@@ -758,7 +670,9 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
         
         return FutureBuilder<List<DadosCorridas>>(
           future: _userService.buscaDadosCorrida(
-              codEmpresa: user.usuarioResp?.empresas?.first.codEmpresa,
+              codEmpresa: (user.usuarioResp?.empresas?.isNotEmpty == true)
+                  ? user.usuarioResp!.empresas!.first.codEmpresa
+                  : null,
               codMotorista: null,
               dtaIni: DateTime.now(),
               dtaFim: DateTime.now()),
@@ -843,6 +757,102 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
   }
 
   // Widget para ações rápidas (removido botão Nova Corrida - agora está na AppBar)
+  Widget _buildNewOrderButton() {
+    return Container(
+      margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+      width: double.infinity,
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(18),
+          onTap: () {
+            if (!mounted) return;
+            if (user.usuarioResp?.indBloqueado == 1) {
+              context.showInfoBar(
+                duration: const Duration(seconds: 8),
+                content: const Text(
+                    "Não será possível iniciar corrida, novas solicitações estão bloqueadas."),
+              );
+              return;
+            }
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (_) => DeliveryRequestScreen(user: user),
+              ),
+            );
+          },
+          child: Ink(
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFFE53935), Color(0xFFB71C1C)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(18),
+              boxShadow: [
+                BoxShadow(
+                  color: const Color(0xFFE53935).withOpacity(0.35),
+                  blurRadius: 14,
+                  offset: const Offset(0, 6),
+                ),
+              ],
+            ),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+              child: Row(
+                children: [
+                  Container(
+                    width: 52,
+                    height: 52,
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(0.2),
+                      borderRadius: BorderRadius.circular(14),
+                    ),
+                    child: const Icon(
+                      Icons.motorcycle_rounded,
+                      color: Colors.white,
+                      size: 30,
+                    ),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Nova Entrega',
+                          style: GoogleFonts.poppins(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w700,
+                            color: Colors.white,
+                          ),
+                        ),
+                        Text(
+                          'Solicitar motoboy agora',
+                          style: GoogleFonts.poppins(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w400,
+                            color: Colors.white.withOpacity(0.85),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    color: Colors.white,
+                    size: 18,
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuickActions() {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -954,11 +964,17 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
     int? codMotAux;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux = user.usuarioResp!.motoristas!.first.codMotorista;
+      final motoristas = user.usuarioResp?.motoristas;
+      if (motoristas != null && motoristas.isNotEmpty) {
+        codMotAux = motoristas.first.codMotorista;
+      }
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux = user.usuarioResp!.empresas!.first.codEmpresa;
+      final empresas = user.usuarioResp?.empresas;
+      if (empresas != null && empresas.isNotEmpty) {
+        codEmAux = empresas.first.codEmpresa;
+      }
     }
 
     final finalCodEmpresa = codEmpresa ?? codEmAux;
@@ -1059,11 +1075,17 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
     int? codMotAux;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux = user.usuarioResp!.motoristas!.first.codMotorista;
+      final motoristas = user.usuarioResp?.motoristas;
+      if (motoristas != null && motoristas.isNotEmpty) {
+        codMotAux = motoristas.first.codMotorista;
+      }
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux = user.usuarioResp!.empresas!.first.codEmpresa;
+      final empresas = user.usuarioResp?.empresas;
+      if (empresas != null && empresas.isNotEmpty) {
+        codEmAux = empresas.first.codEmpresa;
+      }
     }
 
     final finalCodEmpresa = codEmpresa ?? codEmAux;
@@ -1294,7 +1316,10 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                     children: <Widget>[
                       // Seção de Boas-vindas
                       _buildWelcomeCard(),
-                      
+
+                      // Botão principal - Nova Corrida
+                      _buildNewOrderButton(),
+
                       // Seção de Ações Rápidas
                       _buildQuickActions(),
                       
@@ -1381,44 +1406,32 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
     );
   }
 
-  Future<bool> _onBackPressed() async {
-    // var page = log(ModalRoute.of(context)!.settings.name ?? "" + "");
-    var can = Navigator.canPop(context);
-    if (can) {
-      //  Navigator.pop(context);
-      return true;
-    } else {
-      return await showDialog(
-        context: context,
-        builder: (context) => new AlertDialog(
-          title: new Text('Confirmação'),
-          content: new Text('Deseja fechar o app'),
-          actions: <Widget>[
-            new GestureDetector(
-              onTap: () => Navigator.of(context).pop(true),
-              child: Text(
-                "NÃO",
-                style: TextStyle(fontSize: 14),
-              ),
-            ),
-            SizedBox(height: 20),
-            new GestureDetector(
-              onTap: () async {
-                if (can)
-                  Navigator.of(context).pop();
-                else
-                  SystemNavigator.pop();
-                // can = Navigator.canPop(context);
-                // if (can) Navigator.of(context).pop(true);
-                // Navigator.of(context).pop(true);
-
-                //Navigator.popUntil(context, (route) => false);
-              },
-              child: Text("SIM", style: TextStyle(fontSize: 14)),
-            ),
-          ],
-        ),
-      );
+  Future<void> _onBackPressed() async {
+    if (Navigator.canPop(context)) {
+      // Há tela abaixo (sub-navegação) — volta normalmente
+      Navigator.of(context).pop();
+      return;
     }
+    // Está na home raiz — pergunta se quer fechar o app
+    await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmação'),
+        content: const Text('Deseja fechar o app?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("NÃO"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(false);
+              SystemNavigator.pop();
+            },
+            child: const Text("SIM", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
   }
 }

@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:io';
 import 'package:intl/intl.dart';
 
+import 'package:delivery_front/core/api_config.dart';
 import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:dio/dio.dart';
@@ -15,9 +16,8 @@ final _authErrorController = StreamController<bool>.broadcast();
 Stream<bool> get authErrorStream => _authErrorController.stream;
 
 class ApiBaseHelper {
-  // static String baseUrl = "https://uber.appminhaescola.com.br/BemWS/ws";
-  static String baseUrl = "https://api.foolentregas.com.br/v1";
-  //static String baseUrl = "http://192.168.1.104:8080/v1";
+  /// URL da API - configurável em lib/core/api_config.dart
+  static String get baseUrl => ApiConfig.baseUrl;
 
   static bool isBluetoohPareado = false;
   static bool isPipAtivado = false;
@@ -41,6 +41,9 @@ class ApiBaseHelper {
   //Motorista conclui
   static const int IND_STATUS_CORRIDA_3_CONCLUIDA = 3;
   static const int IND_STATUS_CORRIDA_4_CANCELADA = 4;
+  // Cobrança na Entrega — não enviados ao backend, apenas usados no app
+  static const int IND_STATUS_CORRIDA_5_AGUARDANDO_COBRANCA = 5;
+  static const int IND_STATUS_CORRIDA_6_PENDENCIA_ABERTA = 6;
 
   static const int IND_TIPO_CARTAO = 1;
   static const int IND_TIPO_DINHEIRO = 2;
@@ -72,8 +75,9 @@ class ApiBaseHelper {
   /// Cria as opções base do Dio
   static BaseOptions _createBaseOptions() {
     return BaseOptions(
-      baseUrl: baseUrl,
+      baseUrl: ApiConfig.baseUrl,
       connectTimeout: const Duration(seconds: 30),
+      sendTimeout: const Duration(seconds: 30),
       receiveTimeout: const Duration(seconds: 30),
       headers: {
         HttpHeaders.contentTypeHeader: "application/json",

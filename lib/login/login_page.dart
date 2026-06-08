@@ -54,6 +54,7 @@ class _LoginPageState extends State<LoginPage> {
     if (_formKey.currentState!.validate()) {
       _controler.setEmail(login);
       _controler.setSenha(senha);
+      _controler.setIndLogado(true);
       _controler.authenticate();
     } else {
       print('🔴 [LOGIN_PAGE] Validação do formulário falhou!');
@@ -108,14 +109,15 @@ class _LoginPageState extends State<LoginPage> {
   bool _isObscure = true;
   @override
   Widget build(BuildContext context) {
-    // Cores do mockup
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    // Cores adaptadas ao tema
     const Color primaryRed = Color(0xFFE53935);
-    const Color backgroundColor = Color(0xFFFFFFFF);
-    const Color fieldBackground = Color(0xFFF5F5F5);
-    const Color textPrimary = Color(0xFF1A1A1A);
-    const Color textSecondary = Color(0xFF757575);
-    const Color iconColor = Color(0xFF9E9E9E);
-    const Color placeholderColor = Color(0xFF9E9E9E);
+    final Color backgroundColor = isDark ? const Color(0xFF121212) : const Color(0xFFFFFFFF);
+    final Color fieldBackground = isDark ? const Color(0xFF2A2A2A) : const Color(0xFFF5F5F5);
+    final Color textPrimary = isDark ? const Color(0xFFE0E0E0) : const Color(0xFF1A1A1A);
+    final Color textSecondary = isDark ? const Color(0xFF9E9E9E) : const Color(0xFF757575);
+    final Color iconColor = isDark ? const Color(0xFF757575) : const Color(0xFF9E9E9E);
+    final Color placeholderColor = isDark ? const Color(0xFF757575) : const Color(0xFF9E9E9E);
 
     // Logo flat no topo
     final logo = Hero(

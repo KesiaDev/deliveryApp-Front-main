@@ -9,6 +9,8 @@ List<AcoesEdicaoAdmin> getTiposAcoesEmpresa() {
   listTipo.add(AcoesEdicaoAdmin(indTipo: 3, desTipo: "Bloquear/Desbloquear"));
   listTipo.add(AcoesEdicaoAdmin(indTipo: 4, desTipo: "Excluir"));
   listTipo.add(AcoesEdicaoAdmin(indTipo: 5, desTipo: "Ver cartão"));
+  listTipo.add(AcoesEdicaoAdmin(indTipo: 6, desTipo: "💳 Config. Pagamentos"));
+  listTipo.add(AcoesEdicaoAdmin(indTipo: 7, desTipo: "📄 Boletos / Carteira"));
   return listTipo;
 }
 

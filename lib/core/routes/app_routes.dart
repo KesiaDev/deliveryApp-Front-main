@@ -52,5 +52,21 @@ class AppRoutes {
 
   // Mapa do Motorista
   static const String map = '/map';
+
+  // Navegação in-app do motorista
+  static const String motoristaNavigation = '/navigation/motorista';
+
+  // Monitor de corrida ao vivo + simulador
+  static const String corridaMonitor = '/corrida/monitor';
+  static const String rideSimulator = '/corrida/simulator';
+
+  // Pagamentos avançados
+  static const String carteiraFool = '/pagamentos/carteira';
+  static const String boletosSemanais = '/pagamentos/boletos';
+  static const String empresaPaymentConfig = '/pagamentos/config';
+
+  // Cobrança na Entrega (CoD)
+  static const String pendenciasMotorista = '/cod/pendencias';
+  static const String confirmacaoCobranca = '/cod/confirmacao';
 }
 

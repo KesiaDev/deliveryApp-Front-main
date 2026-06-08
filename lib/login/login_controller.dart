@@ -1,6 +1,9 @@
+import 'dart:async';
+
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
 import 'package:delivery_front/core/core.dart';
+import 'package:delivery_front/services/firebase_messaging_service.dart';
 import 'package:delivery_front/shared/components/loading_dialog.dart';
 import 'package:delivery_front/shared/models/loginRequest.dart';
 import 'package:delivery_front/shared/services/local_storage_service.dart';
@@ -23,11 +26,22 @@ class LoginControler {
   void setSenha(String s) => senha = s;
   void setIndLogado(bool s) => indLogado = s;
 
-  Future<LoginRequest> get credential async => LoginRequest(
+  Future<LoginRequest> get credential async {
+    // Timeout de 2s no token FCM para não bloquear login em redes lentas
+    String tokenFcm = '';
+    try {
+      tokenFcm = await LocalStorageService.tokenFCM
+          .timeout(const Duration(seconds: 2), onTimeout: () => '');
+    } catch (_) {
+      tokenFcm = '';
+    }
+    return LoginRequest(
       email: email,
       senha: senha,
-      desTokenFcm: await LocalStorageService.tokenFCM,
-      indLogado: indLogado);
+      desTokenFcm: tokenFcm.isEmpty ? null : tokenFcm,
+      indLogado: indLogado,
+    );
+  }
 
   Future<void> authenticate() async {
     print('🟡 [LOGIN_CONTROLLER] authenticate() chamado');
@@ -36,14 +50,20 @@ class LoginControler {
     
     try {
       DialogBuilder(context).showLoadingIndicator("");
-      await Future.delayed(const Duration(seconds: 1));
       
       print('🟡 [LOGIN_CONTROLLER] Chamando _userService.login...');
       final credentialData = await credential;
       print('🟡 [LOGIN_CONTROLLER] Credential email: ${credentialData.email}');
       print('🟡 [LOGIN_CONTROLLER] Credential senha length: ${credentialData.senha?.length ?? 0}');
       
-      final result = await _userService.login(credentialData);
+      // Timeout de segurança (30s): evita ficar travado em "Aguarde" indefinidamente
+      final result = await _userService
+          .login(credentialData)
+          .timeout(const Duration(seconds: 30), onTimeout: () {
+        throw ApiException(
+          message: 'Tempo esgotado. Verifique sua conexão com a internet e tente novamente.',
+        );
+      });
       print('🟡 [LOGIN_CONTROLLER] Resultado recebido: ${result != null ? "SUCESSO" : "NULL"}');
       
       if (result != null) {
@@ -58,7 +78,12 @@ class LoginControler {
 
         await _userService.saveLocalDB(result);
         print('🟡 [LOGIN_CONTROLLER] Usuário salvo no banco local');
-        
+
+        // Sincroniza token FCM agora que o JWT está disponível
+        if (!kIsWeb) {
+          FirebaseMessagingService.syncAfterLogin().catchError((_) {});
+        }
+
         // Salva credenciais para biometria (se habilitada)
         final biometricEnabled = await BiometricService.isBiometricEnabled();
         if (biometricEnabled) {
@@ -111,51 +136,40 @@ class LoginControler {
     } on ApiException catch (e) {
       print('🔴 [LOGIN_CONTROLLER] ApiException capturada: ${e.message}');
       print('🔴 [LOGIN_CONTROLLER] Status Code: ${e.statusCode}');
-      final friendlyMessage = ErrorHandler.handleError(e);
-      showToast(context, friendlyMessage);
+      if (context.mounted) {
+        final friendlyMessage = ErrorHandler.handleError(e);
+        showToast(context, friendlyMessage);
+      }
     } catch (e, stackTrace) {
       print('🔴 [LOGIN_CONTROLLER] Erro genérico: ${e.toString()}');
       print('🔴 [LOGIN_CONTROLLER] StackTrace: $stackTrace');
-      final friendlyMessage = ErrorHandler.handleError(e, stackTrace: stackTrace);
-      showToast(context, friendlyMessage);
+      if (context.mounted) {
+        final friendlyMessage = ErrorHandler.handleError(e, stackTrace: stackTrace);
+        showToast(context, friendlyMessage);
+      }
     } finally {
-      DialogBuilder(context).hideOpenDialog();
+      try {
+        if (context.mounted) {
+          DialogBuilder(context).hideOpenDialog();
+        }
+      } catch (_) {
+        // Garante que erros ao fechar o dialog não deixem o app travado
+      }
     }
   }
 
   Future<bool> authenticateCurrentUser() async {
     try {
-      DialogBuilder(context).showLoadingIndicator("");
-      await Future.delayed(Duration(seconds: 1));
       var user = await _userService.getCurrentUser();
       if (user != null) {
         setEmail(user.usuario!);
         setSenha(user.desSenha!);
         setIndLogado(true);
+        // authenticate() já gerencia o loading dialog e navega internamente
         await authenticate();
 
         var result = await _userService.getCurrentUser();
-        if (result != null) {
-          if (!context.mounted) return false;
-          if (ApiBaseHelper.IND_TIP_PERFIL_99_ADMIN_SISTEMA == result.indTipo) {
-            await Navigator.pushReplacementNamed(
-              context,
-              AppRoutes.homeAdmin,
-            );
-          } else {
-            if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == result.indTipo) {
-              ApiBaseHelper.lat = result.usuarioResp!.desLatitude!;
-              ApiBaseHelper.long = result.usuarioResp!.desLongitude!;
-            }
-
-            if (!context.mounted) return false;
-            await Navigator.pushReplacementNamed(
-              context,
-              AppRoutes.home,
-            );
-          }
-          return true;
-        }
+        return result != null;
       }
       return false;
     } on ApiException catch (e) {
@@ -168,8 +182,6 @@ class LoginControler {
       final friendlyMessage = ErrorHandler.handleError(e, stackTrace: stackTrace);
       showToast(context, friendlyMessage);
       return false;
-    } finally {
-      DialogBuilder(context).hideOpenDialog();
     }
   }
 

@@ -29,9 +29,21 @@ class _AnalyticsDashboardPageState extends State<AnalyticsDashboardPage> {
   final UserService _userService = UserService();
   DateTime _dataInicio = DateTime.now().subtract(Duration(days: 30));
   DateTime _dataFim = DateTime.now();
-  bool _isLoading = false;
   List<DadosCorridas> _corridas = [];
   List<SaldosCorrida> _saldos = [];
+  late Future<Map<String, dynamic>> _dadosFuture;
+
+  @override
+  void initState() {
+    super.initState();
+    _dadosFuture = _carregarDados();
+  }
+
+  void _recarregarDados() {
+    setState(() {
+      _dadosFuture = _carregarDados();
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -90,12 +102,12 @@ class _AnalyticsDashboardPageState extends State<AnalyticsDashboardPage> {
       ),
       body: RefreshIndicator(
         onRefresh: () async {
-          setState(() {});
+          _recarregarDados();
         },
         child: FutureBuilder<Map<String, dynamic>>(
-          future: _carregarDados(),
+          future: _dadosFuture,
           builder: (context, snapshot) {
-            if (snapshot.connectionState == ConnectionState.waiting || _isLoading) {
+            if (snapshot.connectionState == ConnectionState.waiting) {
               return Center(child: CircularProgressIndicator());
             }
 
@@ -160,7 +172,6 @@ class _AnalyticsDashboardPageState extends State<AnalyticsDashboardPage> {
   }
 
   Future<Map<String, dynamic>> _carregarDados() async {
-    setState(() => _isLoading = true);
     try {
       final corridas = await _userService.buscaDadosCorrida(
         codEmpresa: widget.codEmpresa,
@@ -183,15 +194,11 @@ class _AnalyticsDashboardPageState extends State<AnalyticsDashboardPage> {
         'saldos': saldos ?? [],
       };
     } catch (e) {
-      // Log do erro para debug
       print('Erro ao carregar dados de analytics: $e');
-      // Retorna listas vazias em caso de erro para não quebrar a UI
       return {
         'corridas': [],
         'saldos': [],
       };
-    } finally {
-      setState(() => _isLoading = false);
     }
   }
 
@@ -205,10 +212,9 @@ class _AnalyticsDashboardPageState extends State<AnalyticsDashboardPage> {
     );
 
     if (periodo != null) {
-      setState(() {
-        _dataInicio = periodo.start;
-        _dataFim = periodo.end;
-      });
+      _dataInicio = periodo.start;
+      _dataFim = periodo.end;
+      _recarregarDados();
     }
   }
 

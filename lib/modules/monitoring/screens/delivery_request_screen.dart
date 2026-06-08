@@ -1,4 +1,4 @@
-import 'dart:async';
+﻿import 'dart:async';
 import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:google_maps_flutter/google_maps_flutter.dart';
@@ -113,7 +113,7 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
   void _fitCamera() {
     if (_mapController == null) return;
     if (_deliveryLat == null) {
-      _mapController!.animateCamera(
+      _mapController?.animateCamera(
           CameraUpdate.newLatLngZoom(LatLng(_pickupLat, _pickupLng), 15));
       return;
     }
@@ -121,7 +121,7 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
     final maxLat = max(_pickupLat, _deliveryLat!);
     final minLng = min(_pickupLng, _deliveryLng!);
     final maxLng = max(_pickupLng, _deliveryLng!);
-    _mapController!.animateCamera(CameraUpdate.newLatLngBounds(
+    _mapController?.animateCamera(CameraUpdate.newLatLngBounds(
       LatLngBounds(
         southwest: LatLng(minLat, minLng),
         northeast: LatLng(maxLat, maxLng),
@@ -244,12 +244,9 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
       return;
     }
 
-    // Pagamento obrigatório antes de liberar pro motorista (exceto dinheiro)
-    if (_paymentType != 'dinheiro') {
-      final paid = await _processPayment();
-      if (!mounted) return;
-      if (!paid) return;
-    }
+    final paid = await _processPayment();
+    if (!mounted) return;
+    if (!paid) return;
 
     if (!mounted) return;
     setState(() => _isRequesting = true);
@@ -348,7 +345,7 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
       return paid == true;
     }
 
-    return true; // dinheiro — sem gate de pagamento
+    return false;
   }
 
   void _snack(String msg) => ScaffoldMessenger.of(context)
@@ -360,7 +357,7 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
     _deliveryCtrl.dispose();
     _clientNameCtrl.dispose();
     _notesCtrl.dispose();
-    _mapController?.dispose();
+    _mapController = null;
     super.dispose();
   }
 
@@ -552,12 +549,6 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
                           icon: Icons.credit_card_rounded,
                           selected: _paymentType == 'cartao',
                           onTap: () => setState(() => _paymentType = 'cartao')),
-                      const SizedBox(width: 8),
-                      _PayChip(
-                          label: 'Dinheiro',
-                          icon: Icons.attach_money_rounded,
-                          selected: _paymentType == 'dinheiro',
-                          onTap: () => setState(() => _paymentType = 'dinheiro')),
                     ],
                   ),
 
@@ -622,14 +613,26 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
                         elevation: 0,
                         shape: RoundedRectangleBorder(
                             borderRadius: BorderRadius.circular(16)),
-                        disabledBackgroundColor: Colors.grey.shade300,
+                        disabledBackgroundColor: _red,
+                        disabledForegroundColor: Colors.white,
                       ),
                       child: _isRequesting
-                          ? const SizedBox(
-                              width: 22,
-                              height: 22,
-                              child: CircularProgressIndicator(
-                                  color: Colors.white, strokeWidth: 2.5))
+                          ? Row(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                const SizedBox(
+                                  width: 20,
+                                  height: 20,
+                                  child: CircularProgressIndicator(
+                                      color: Colors.white, strokeWidth: 2.5),
+                                ),
+                                const SizedBox(width: 12),
+                                Text('Buscando motorista...',
+                                    style: GoogleFonts.poppins(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w600)),
+                              ],
+                            )
                           : Row(
                               mainAxisAlignment: MainAxisAlignment.center,
                               children: [
@@ -643,9 +646,7 @@ class _DeliveryRequestScreenState extends State<DeliveryRequestScreen> {
                                 ),
                                 const SizedBox(width: 10),
                                 Text(
-                                  _paymentType == 'dinheiro'
-                                      ? 'Solicitar Motoboy'
-                                      : 'Pagar e Solicitar',
+                                  'Pagar e Solicitar',
                                   style: GoogleFonts.poppins(
                                       fontSize: 16,
                                       fontWeight: FontWeight.w700),

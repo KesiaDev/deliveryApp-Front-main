@@ -4,19 +4,32 @@
 
 import 'dart:convert';
 
+/// Todos os tipos disponíveis na plataforma
 List<TipoCorrida> getTipoCorrida() {
-  List<TipoCorrida> listTipo = [];
-  listTipo.add(TipoCorrida(indTipo: 1, desTipo: "Cartão", isSelected: true));
-  listTipo.add(TipoCorrida(indTipo: 2, desTipo: "Dinheiro", isSelected: false));
-  listTipo.add(TipoCorrida(indTipo: 3, desTipo: "Pix", isSelected: false));
-  return listTipo;
+  return [
+    TipoCorrida(indTipo: 1, desTipo: "Cartão", isSelected: true),
+    TipoCorrida(indTipo: 2, desTipo: "Dinheiro", isSelected: false),
+    TipoCorrida(indTipo: 3, desTipo: "Pix", isSelected: false),
+    TipoCorrida(indTipo: 4, desTipo: "Boleto", isSelected: false),
+    TipoCorrida(indTipo: 5, desTipo: "Carteira Fool", isSelected: false),
+  ];
+}
+
+/// Filtra tipos de acordo com os métodos aceitos pela empresa
+/// acceptedKeys: ['cartao','dinheiro','pix','boleto','carteira']
+List<TipoCorrida> getTipoCorridaFiltrado(List<String> acceptedKeys) {
+  final all = getTipoCorrida();
+  if (acceptedKeys.isEmpty) return all;
+  final map = {
+    'cartao': 1, 'dinheiro': 2, 'pix': 3, 'boleto': 4, 'carteira': 5,
+  };
+  final allowed = acceptedKeys.map((k) => map[k]).whereType<int>().toSet();
+  return all.where((t) => allowed.contains(t.indTipo)).toList();
 }
 
 String getTitleTipoCorrida(int indTipo) {
-  if (indTipo != null) {
-    for (var element in getTipoCorrida()) {
-      if (element.indTipo == indTipo) return element.desTipo;
-    }
+  for (var element in getTipoCorrida()) {
+    if (element.indTipo == indTipo) return element.desTipo;
   }
   return "";
 }

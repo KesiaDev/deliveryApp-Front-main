@@ -59,11 +59,12 @@ class Usuario {
             : (json["tipPerfil"] is String && json["tipPerfil"] != null)
                 ? int.tryParse(json["tipPerfil"] as String)
                 : json["tipPerfil"] as int?,
+        // BUG-001 fix: se backend não retornar indSucesso, trata como null (não como 0/falha)
         indSucesso: json["indSucesso"] is int
             ? json["indSucesso"] as int?
             : (json["indSucesso"] is String && json["indSucesso"] != null)
                 ? int.tryParse(json["indSucesso"] as String)
-                : json["indSucesso"] as int? ?? 0,
+                : null,
         usuarioResp: json["usuarioResp"] != null
             ? UsuarioResp.fromJson(json["usuarioResp"] as Map<String, dynamic>)
             : null,
@@ -371,6 +372,8 @@ class Endereco {
     this.dtaEdicao,
     this.indInativo,
     this.desComplemento,
+    this.desLatitude,
+    this.desLongitude,
   });
 
   int? numSeq;
@@ -387,6 +390,8 @@ class Endereco {
   dynamic? dtaEdicao;
   int? indInativo;
   dynamic? desComplemento;
+  double? desLatitude;
+  double? desLongitude;
 
   factory Endereco.fromJson(Map<String, dynamic> json) => Endereco(
         numSeq: json["numSeq"],
@@ -403,6 +408,12 @@ class Endereco {
         dtaEdicao: json["dtaEdicao"],
         indInativo: json["indInativo"],
         desComplemento: json["desComplemento"],
+        desLatitude: json["desLatitude"] is num
+            ? (json["desLatitude"] as num).toDouble()
+            : double.tryParse(json["desLatitude"]?.toString() ?? ''),
+        desLongitude: json["desLongitude"] is num
+            ? (json["desLongitude"] as num).toDouble()
+            : double.tryParse(json["desLongitude"]?.toString() ?? ''),
       );
 
   Map<String, dynamic> toJson() => {
@@ -420,6 +431,8 @@ class Endereco {
         "dtaEdicao": dtaEdicao ?? null,
         "indInativo": indInativo ?? null,
         "desComplemento": desComplemento ?? "",
+        "desLatitude": desLatitude,
+        "desLongitude": desLongitude,
       };
 }
 

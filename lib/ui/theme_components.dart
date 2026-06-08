@@ -11,18 +11,15 @@ const double kSectionSpacing = 16.0;
 final TextStyle kTitleStyle = const TextStyle(
   fontSize: 16,
   fontWeight: FontWeight.w700,
-  color: Colors.black87,
 );
 
 final TextStyle kSubtitleStyle = const TextStyle(
   fontSize: 13,
-  color: Colors.black54,
 );
 
 final TextStyle kNumberStyle = const TextStyle(
   fontSize: 22,
   fontWeight: FontWeight.w800,
-  color: Colors.black87,
 );
 
 class AppCard extends StatelessWidget {
@@ -41,12 +38,13 @@ class AppCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cardColor = Theme.of(context).cardColor;
     return Container(
       margin: margin,
       constraints: BoxConstraints(minHeight: minHeight ?? 0),
       padding: padding,
       decoration: BoxDecoration(
-        color: kCardWhite,
+        color: cardColor,
         borderRadius: BorderRadius.circular(kRadius),
         boxShadow: [
           BoxShadow(
@@ -71,16 +69,22 @@ class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
 
   @override
   Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final iconColor = theme.colorScheme.onSurface;
+    final bgColor = theme.appBarTheme.backgroundColor ?? theme.cardColor;
+    final menuBg = theme.brightness == Brightness.dark
+        ? const Color(0xFF2C2C2C)
+        : const Color(0xFFF5F5F5);
     return AppBar(
       elevation: 0,
-      backgroundColor: kCardWhite,
+      backgroundColor: bgColor,
       automaticallyImplyLeading: false,
       centerTitle: false,
       titleSpacing: 0,
       leadingWidth: 56,
       leading: showBack
           ? IconButton(
-              icon: const Icon(Icons.arrow_back, color: Colors.black87),
+              icon: Icon(Icons.arrow_back, color: iconColor),
               onPressed: () => Navigator.of(context).maybePop(),
             )
           : Builder(
@@ -88,18 +92,12 @@ class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
                 return Container(
                   margin: const EdgeInsets.all(8),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFF5F5F5),
+                    color: menuBg,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: IconButton(
-                    icon: const Icon(
-                      Icons.menu_rounded,
-                      color: Color(0xFF1A1A1A),
-                      size: 20,
-                    ),
-                    onPressed: () {
-                      Scaffold.of(context).openDrawer();
-                    },
+                    icon: Icon(Icons.menu_rounded, color: iconColor, size: 20),
+                    onPressed: () => Scaffold.of(context).openDrawer(),
                     tooltip: MaterialLocalizations.of(context).openAppDrawerTooltip,
                   ),
                 );
@@ -107,9 +105,14 @@ class AppAppBar extends StatelessWidget implements PreferredSizeWidget {
             ),
       title: Padding(
         padding: const EdgeInsets.only(left: 12.0),
-        child: Text(title, style: kTitleStyle),
+        child: Text(
+          title,
+          style: kTitleStyle.copyWith(color: iconColor),
+        ),
       ),
-      actions: trailing != null ? [Padding(padding: const EdgeInsets.only(right: 8.0), child: trailing!)] : null,
+      actions: trailing != null
+          ? [Padding(padding: const EdgeInsets.only(right: 8.0), child: trailing!)]
+          : null,
     );
   }
 
@@ -121,12 +124,14 @@ class ActionButton extends StatelessWidget {
   final String label;
   final VoidCallback onTap;
   final double? width;
+  final Color? color;
 
   const ActionButton({
     Key? key,
     required this.label,
     required this.onTap,
     this.width,
+    this.color,
   }) : super(key: key);
 
   @override
@@ -138,7 +143,7 @@ class ActionButton extends StatelessWidget {
         width: width,
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
-          color: kPrimaryRed,
+          color: color ?? kPrimaryRed,
           borderRadius: BorderRadius.circular(12),
         ),
         child: Center(

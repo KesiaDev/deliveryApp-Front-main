@@ -3,6 +3,7 @@ import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/motorista/corridas/lista_solicitacoes_motorista_controller.dart';
 import 'package:delivery_front/shared/models/motorista/models/lista_solicitacoes.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
+import 'package:delivery_front/shared/components/Utils.dart';
 import 'theme_components.dart';
 import 'corrida_card.dart';
 import 'empty_state.dart';
@@ -66,7 +67,7 @@ class _HistoricoPageState extends State<HistoricoPage> {
                             final solicitacao = _corridas[index];
                             final empresa = solicitacao.dbEmpresasByCodEmpresa?.desNomeFantasia ?? "Empresa";
                             final distancia = "${solicitacao.qtdKmCorrida ?? 0} km";
-                            final valor = "R\$ ${solicitacao.vlrTotalMotorista?.toStringAsFixed(2) ?? "0.00"}";
+                            final valor = Utils.formatBRL(solicitacao.vlrTotalMotorista);
                             final data = ApiBaseHelper.getDtaFormatada(solicitacao.dthSolicitacao);
 
                             return CorridaCard(

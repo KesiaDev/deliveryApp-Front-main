@@ -10,6 +10,7 @@ class CorridaCard extends StatelessWidget {
   final VoidCallback onPrimaryAction;
   final String? actionLabel;
   final bool showAction;
+  final VoidCallback? onDecline;
 
   const CorridaCard({
     Key? key,
@@ -21,6 +22,7 @@ class CorridaCard extends StatelessWidget {
     required this.onPrimaryAction,
     this.actionLabel,
     this.showAction = true,
+    this.onDecline,
   }) : super(key: key);
 
   @override
@@ -58,6 +60,15 @@ class CorridaCard extends StatelessWidget {
                   width: 92,
                   onTap: onPrimaryAction,
                 ),
+                if (onDecline != null) ...[
+                  const SizedBox(height: 6),
+                  ActionButton(
+                    label: "Recusar",
+                    width: 92,
+                    onTap: onDecline!,
+                    color: Colors.grey.shade400,
+                  ),
+                ],
               ],
             ],
           )

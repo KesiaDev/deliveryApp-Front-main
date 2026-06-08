@@ -10,6 +10,7 @@ import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:geocoding/geocoding.dart';
 import 'dart:convert';
 
 class CadastroController {
@@ -80,7 +81,6 @@ class CadastroController {
   Future<void> registraCem(int indTipoProcesso) async {
     try {
       DialogBuilder(context).showLoadingIndicator("");
-      await Future.delayed(Duration(seconds: 1));
 
       // Normaliza email para lowercase e trim para garantir consistência
       final emailNormalizado = email.trim().toLowerCase();
@@ -137,8 +137,9 @@ class CadastroController {
         Endereco end = Endereco();
 
         if (indTipoProcesso == 2) {
-          end = ApiBaseHelper
-              .userSessao!.usuarioResp!.motoristas!.first.enderecos!.first;
+          final motoristas = ApiBaseHelper.userSessao?.usuarioResp?.motoristas;
+          final enderecos = (motoristas?.isNotEmpty == true) ? motoristas!.first.enderecos : null;
+          end = (enderecos?.isNotEmpty == true) ? enderecos!.first : Endereco();
           end.desBairro = desBairro;
           end.desCep = desCep;
           end.desCidade = desCidade;
@@ -164,7 +165,8 @@ class CadastroController {
       } else {
         Empresa empre = new Empresa();
         if (indTipoProcesso == 2) {
-          empre = ApiBaseHelper.userSessao!.usuarioResp!.empresas!.first;
+          final empresas = ApiBaseHelper.userSessao?.usuarioResp?.empresas;
+          empre = (empresas?.isNotEmpty == true) ? empresas!.first : Empresa();
           empre.desCpfCnpj = cpf;
           empre.desRazaoSocial = nome;
           empre.desNomeFantasia = nome;
@@ -186,8 +188,9 @@ class CadastroController {
         Endereco end = Endereco();
 
         if (indTipoProcesso == 2) {
-          end = ApiBaseHelper
-              .userSessao!.usuarioResp!.empresas!.first.enderecos!.first;
+          final empresasEnd = ApiBaseHelper.userSessao?.usuarioResp?.empresas;
+          final enderecosEmp = (empresasEnd?.isNotEmpty == true) ? empresasEnd!.first.enderecos : null;
+          end = (enderecosEmp?.isNotEmpty == true) ? enderecosEmp!.first : Endereco();
           end.desBairro = desBairro;
           end.desCep = desCep;
           end.desCidade = desCidade;
@@ -206,6 +209,20 @@ class CadastroController {
               desRua: desRua);
         }
 
+        // Geocodifica o endereço para salvar lat/lng do ponto de coleta
+        try {
+          final enderecoCompleto =
+              '${desRua ?? ''} ${desNumero ?? ''}, ${desBairro ?? ''}, ${desCidade ?? ''} - ${desEstado ?? ''}, Brasil';
+          final locations = await locationFromAddress(enderecoCompleto)
+              .timeout(const Duration(seconds: 8));
+          if (locations.isNotEmpty) {
+            end.desLatitude = locations.first.latitude;
+            end.desLongitude = locations.first.longitude;
+          }
+        } catch (_) {
+          // Geocoding falhou — endereço salvo sem coordenadas
+        }
+
         List<Endereco> listEnderecos = <Endereco>[];
         listEnderecos.add(end);
 
@@ -222,11 +239,21 @@ class CadastroController {
         CadastroCemRequest cem = CadastroCemRequest(
             email: '', emailMotoristaAmigo: '', nome: '', senha: '');
 
-        var result = await _userService.registraCem(cem, login2: userCadastro);
+        var result = await _userService
+            .registraCem(cem, login2: userCadastro)
+            .timeout(const Duration(seconds: 35), onTimeout: () {
+          throw ApiException(
+            message: 'Tempo esgotado. Verifique sua conexão com a internet e tente novamente.',
+          );
+        });
 
         if (result != null) {
           if (ApiBaseHelper.userSessao != null &&
               ApiBaseHelper.userSessao!.codUsuario != null) {
+            // Fecha dialog antes de navegar para evitar !_debugLocked
+            try { if (context.mounted) DialogBuilder(context).hideOpenDialog(); } catch (_) {}
+            await Future.delayed(Duration.zero);
+            if (!context.mounted) return;
             Navigator.pop(context);
           } else {
             // Garante que o email está normalizado
@@ -250,6 +277,10 @@ class CadastroController {
             }
 
             await _userService.saveLocalDB(userLogin!);
+            // Fecha dialog antes de navegar para evitar !_debugLocked
+            try { if (context.mounted) DialogBuilder(context).hideOpenDialog(); } catch (_) {}
+            await Future.delayed(Duration.zero);
+            if (!context.mounted) return;
             await Navigator.pushReplacementNamed(
               context,
               AppRoutes.home,
@@ -278,8 +309,13 @@ class CadastroController {
           userCadastro.usuarioResp!.senha = senha;
         }
 
-        var result =
-            await _userService.atualizaUsuario(cem, login2: userCadastro);
+        var result = await _userService
+            .atualizaUsuario(cem, login2: userCadastro)
+            .timeout(const Duration(seconds: 35), onTimeout: () {
+          throw ApiException(
+            message: 'Tempo esgotado. Verifique sua conexão com a internet e tente novamente.',
+          );
+        });
 
         if (result != null) {
           // Garante que o email está normalizado
@@ -306,6 +342,10 @@ class CadastroController {
           } else {
             await _userService.saveLocalDB(result);
           }
+          // Fecha dialog antes de navegar para evitar !_debugLocked
+          try { if (context.mounted) DialogBuilder(context).hideOpenDialog(); } catch (_) {}
+          await Future.delayed(Duration.zero);
+          if (!context.mounted) return;
           await Navigator.pushReplacementNamed(
             context,
             AppRoutes.home,
@@ -316,7 +356,19 @@ class CadastroController {
       }
     } on ApiException catch (e) {
       final friendlyMessage = ErrorHandler.handleError(e);
-      showToast(context, friendlyMessage);
+      final isConnectionError = friendlyMessage.toLowerCase().contains('conexão') ||
+          friendlyMessage.toLowerCase().contains('timeout') ||
+          friendlyMessage.toLowerCase().contains('internet');
+      if (context.mounted) {
+        try {
+          DialogBuilder(context).hideOpenDialog();
+        } catch (_) {}
+        if (isConnectionError) {
+          _showConnectionErrorDialog(context, friendlyMessage);
+        } else {
+          showToast(context, friendlyMessage);
+        }
+      }
     } on CustomException catch (e) {
       Logger.logError(
         e,
@@ -399,8 +451,39 @@ class CadastroController {
       );
       showToast(context, friendlyMessage);
     } finally {
-      DialogBuilder(context).hideOpenDialog();
+      try {
+        if (context.mounted) {
+          DialogBuilder(context).hideOpenDialog();
+        }
+      } catch (_) {}
     }
+  }
+
+  static void _showConnectionErrorDialog(BuildContext context, String message) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Row(
+          children: [
+            Icon(Icons.wifi_off, color: Colors.orange, size: 28),
+            SizedBox(width: 8),
+            Text('Sem conexão'),
+          ],
+        ),
+        content: Text(
+          '$message\n\n'
+          '• Verifique se o Wi-Fi ou dados móveis estão ativos\n'
+          '• Tente em outra rede\n'
+          '• Desative VPN se estiver usando',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(ctx).pop(),
+            child: const Text('OK'),
+          ),
+        ],
+      ),
+    );
   }
 
   static void showToast(BuildContext context, String text) {

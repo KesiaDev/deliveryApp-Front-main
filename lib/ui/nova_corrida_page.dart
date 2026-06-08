@@ -124,7 +124,7 @@ class _NovaCorridaPageState extends State<NovaCorridaPage> {
                                   final solicitacao = _filteredCorridas[index];
                                   final empresa = solicitacao.dbEmpresasByCodEmpresa?.desNomeFantasia ?? "Empresa";
                                   final distancia = "${solicitacao.qtdKmCorrida ?? 0} km";
-                                  final valor = "R\$ ${solicitacao.vlrTotalMotorista?.toStringAsFixed(2) ?? "0.00"}";
+                                  final valor = Utils.formatBRL(solicitacao.vlrTotalMotorista);
                                   final data = ApiBaseHelper.getDtaFormatada(solicitacao.dthSolicitacao);
 
                                   return CorridaCard(

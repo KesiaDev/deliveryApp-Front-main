@@ -3,6 +3,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
 import 'package:delivery_front/core/app_gradients.dart';
+import 'package:delivery_front/seguranca/redefinir_senha_page.dart';
 
 class RecuperacaoSenhaPage extends StatefulWidget {
   const RecuperacaoSenhaPage({Key? key}) : super(key: key);
@@ -50,6 +51,14 @@ class _RecuperacaoSenhaPageState extends State<RecuperacaoSenhaPage> {
         setState(() {
           _emailEnviado = true;
           _isLoading = false;
+        });
+        // Navega para tela de inserção do OTP + nova senha
+        Future.delayed(const Duration(seconds: 2), () {
+          if (mounted) {
+            Navigator.of(context).push(MaterialPageRoute(
+              builder: (_) => RedefinirSenhaPage(email: _emailController.text.trim()),
+            ));
+          }
         });
       }
     } catch (e) {
@@ -123,7 +132,7 @@ class _RecuperacaoSenhaPageState extends State<RecuperacaoSenhaPage> {
                 ),
                 SizedBox(height: 16),
                 Text(
-                  'Enviamos um link de recuperação para:\n${_emailController.text}',
+                  'Enviamos um código de verificação para:\n${_emailController.text}',
                   style: GoogleFonts.poppins(
                     fontSize: 16,
                     color: textSecondary,
@@ -132,7 +141,7 @@ class _RecuperacaoSenhaPageState extends State<RecuperacaoSenhaPage> {
                 ),
                 SizedBox(height: 8),
                 Text(
-                  'Verifique sua caixa de entrada e siga as instruções para redefinir sua senha.',
+                  'Verifique sua caixa de entrada e use o código de 6 dígitos para redefinir sua senha.',
                   style: GoogleFonts.poppins(
                     fontSize: 14,
                     color: textSecondary,

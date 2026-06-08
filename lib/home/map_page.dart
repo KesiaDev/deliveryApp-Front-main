@@ -12,6 +12,7 @@ import 'package:delivery_front/bussiness/service/user_service.dart';
 import 'package:delivery_front/core/app_images.dart';
 import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
+import 'package:delivery_front/core/theme_controller.dart';
 import 'package:delivery_front/shared/components/Utils.dart';
 import 'package:delivery_front/ui/app_drawer.dart';
 import 'package:delivery_front/shared/models/motorista/models/motoristas_proximos.dart';
@@ -68,6 +69,27 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     carregaPerfil();
     setSourceAndDestinationIcons();
     _verificaGPSAtivo();
+    ThemeController.themeMode.addListener(_onThemeChanged);
+  }
+
+  void _onThemeChanged() {
+    if (_controller != null) {
+      _controller!.setMapStyle(
+        ThemeController.isDark ? Utils.darkMapStyles : Utils.mapStyles,
+      );
+    }
+  }
+
+  @override
+  Future<void> didChangeAppLifecycleState(AppLifecycleState state) async {
+    if (state == AppLifecycleState.resumed && mounted) {
+      // Força redesenho do mapa ao voltar do background (evita tela preta)
+      setState(() {});
+      if (_controller != null) {
+        final style = ThemeController.isDark ? Utils.darkMapStyles : Utils.mapStyles;
+        _controller!.setMapStyle(style);
+      }
+    }
   }
 
   @override
@@ -76,6 +98,7 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
     _locationSubscription?.cancel();
     _gpsVerificationTimer?.cancel();
     _isDisposed = true;
+    ThemeController.themeMode.removeListener(_onThemeChanged);
     _controller?.dispose();
     super.dispose();
   }
@@ -736,7 +759,9 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
             zoomControlsEnabled: true,
             compassEnabled: true,
             onMapCreated: (GoogleMapController controller) {
-              controller.setMapStyle(Utils.mapStyles);
+              controller.setMapStyle(
+                ThemeController.isDark ? Utils.darkMapStyles : Utils.mapStyles,
+              );
               _controller = controller;
               _isMovingManually = false;
               // Inicia rastreamento imediatamente
@@ -754,30 +779,6 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
               });
             },
           ),
-          // Logo FOLL no canto inferior esquerdo
-          Positioned(
-            left: 12,
-            bottom: 100,
-            child: Container(
-              padding: EdgeInsets.all(8),
-              decoration: BoxDecoration(
-                color: Colors.white,
-                borderRadius: BorderRadius.circular(12),
-                boxShadow: [
-                  BoxShadow(
-                    color: Colors.black.withOpacity(0.1),
-                    blurRadius: 8,
-                    offset: Offset(0, 2),
-                  ),
-                ],
-              ),
-              child: Image.asset(
-                AppImages.logo,
-                width: 40,
-                height: 40,
-              ),
-            ),
-          ),
           // Badge de status online/offline no canto superior direito (já está na AppBar)
         ],
       ),
@@ -785,12 +786,6 @@ class _MapPageState extends State<MapPage> with WidgetsBindingObserver {
         user: user,
         userService: _userService,
       ),
-      floatingActionButton: botaoPanico(
-        user: user,
-        locationTracker: _locationTracker,
-        userService: _userService,
-      ),
-      floatingActionButtonLocation: FloatingActionButtonLocation.startFloat,
     );
   }
 }

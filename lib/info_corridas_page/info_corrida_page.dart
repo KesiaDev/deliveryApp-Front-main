@@ -47,18 +47,20 @@ class _InfoCorridaPageState extends State<InfoCorridaPage>
     var userNew = ApiBaseHelper.userSessao;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux == userNew!.usuarioResp!.motoristas!.first.codMotorista;
+      codMotAux = (userNew?.usuarioResp?.motoristas?.isNotEmpty == true)
+          ? userNew!.usuarioResp!.motoristas!.first.codMotorista
+          : null;
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux == userNew!.usuarioResp!.empresas!.first.codEmpresa;
+      codEmAux = (userNew?.usuarioResp?.empresas?.isNotEmpty == true)
+          ? userNew!.usuarioResp!.empresas!.first.codEmpresa
+          : null;
     }
 
     return FutureBuilder<List<DadosCorridas>>(
       future: _userService.buscaDadosCorrida(
-          codEmpresa: ((widget.isAdm != null && widget.isAdm!)
-              ? codEmAux
-              : user.usuarioResp?.empresas!.first.codEmpresa),
+          codEmpresa: codEmAux,
           codMotorista: codMotAux,
           dtaIni: DateTime.now(),
           dtaFim: DateTime.now(),
@@ -210,18 +212,20 @@ class _InfoCorridaPageState extends State<InfoCorridaPage>
     var userNew = ApiBaseHelper.userSessao;
 
     if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-      codMotAux == userNew!.usuarioResp!.motoristas!.first.codMotorista;
+      codMotAux = (userNew?.usuarioResp?.motoristas?.isNotEmpty == true)
+          ? userNew!.usuarioResp!.motoristas!.first.codMotorista
+          : null;
     }
 
     if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo) {
-      codEmAux == userNew!.usuarioResp!.empresas!.first.codEmpresa;
+      codEmAux = (userNew?.usuarioResp?.empresas?.isNotEmpty == true)
+          ? userNew!.usuarioResp!.empresas!.first.codEmpresa
+          : null;
     }
 
     return FutureBuilder<List<DadosCorridas>>(
       future: _userService.buscaDadosCorrida(
-          codEmpresa: (widget.isAdm != null && widget.isAdm!
-              ? codEmAux
-              : user.usuarioResp?.empresas!.first.codEmpresa),
+          codEmpresa: codEmAux,
           codMotorista: codMotAux,
           dtaIni: ApiBaseHelper.findFirstDateOfTheMonth(DateTime.now()),
           dtaFim: ApiBaseHelper.lastDayOfMonth(DateTime.now()),
@@ -501,39 +505,51 @@ class _InfoCorridaPageState extends State<InfoCorridaPage>
                                 child: subheading('Informações gerais - Diário'),
                               ),
                               if (!isAdm)
-                                Padding(
-                                  padding: EdgeInsets.only(left: 8),
-                                  child: TextButton.icon(
-                                    onPressed: () async {
-                                      if (widget.userInfo.usuarioResp!.indBloqueado == 1) {
-                                        context.showInfoBar(
-                                          duration: Duration(seconds: 8),
-                                          content: Text(
-                                              "Não será possível iniciar corrida, novas solicitações estão bloqueadas."),
-                                        );
-                                      } else {
-                                        final result = await Navigator.push(
-                                          context,
-                                          MaterialPageRoute(
-                                              builder: (context) => SolNovaCorridaPage()),
-                                        );
-                                        if (!mounted) return;
-                                        setState(() {});
-                                      }
-                                    },
-                                    icon: Icon(Icons.add, size: 18, color: Colors.red),
-                                    label: Text(
-                                      'Nova corrida',
-                                      style: GoogleFonts.poppins(
-                                        fontSize: 13,
-                                        fontWeight: FontWeight.w600,
-                                        color: Colors.red,
-                                      ),
-                                      maxLines: 1,
-                                      overflow: TextOverflow.ellipsis,
+                                GestureDetector(
+                                  onTap: () async {
+                                    if (widget.userInfo.usuarioResp!.indBloqueado == 1) {
+                                      context.showInfoBar(
+                                        duration: Duration(seconds: 8),
+                                        content: Text(
+                                            "Não será possível iniciar corrida, novas solicitações estão bloqueadas."),
+                                      );
+                                    } else {
+                                      final result = await Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                            builder: (context) => SolNovaCorridaPage()),
+                                      );
+                                      if (!mounted) return;
+                                      setState(() {});
+                                    }
+                                  },
+                                  child: Container(
+                                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                                    decoration: BoxDecoration(
+                                      color: Color(0xFFE53935),
+                                      borderRadius: BorderRadius.circular(14),
+                                      boxShadow: [
+                                        BoxShadow(
+                                          color: Color(0xFFE53935).withOpacity(0.35),
+                                          blurRadius: 12,
+                                          offset: Offset(0, 4),
+                                        ),
+                                      ],
                                     ),
-                                    style: TextButton.styleFrom(
-                                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                    child: Row(
+                                      mainAxisSize: MainAxisSize.min,
+                                      children: [
+                                        Icon(Icons.add_rounded, size: 20, color: Colors.white),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Nova corrida',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w700,
+                                            color: Colors.white,
+                                          ),
+                                        ),
+                                      ],
                                     ),
                                   ),
                                 ),
