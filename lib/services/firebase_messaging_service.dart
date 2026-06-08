@@ -52,9 +52,7 @@ class FirebaseMessagingService {
       RemoteMessage? initialMessage = await _messaging.getInitialMessage();
       if (initialMessage != null) {
         debugPrint('📱 App foi aberto por notificação (estava fechado)');
-              await Future.delayed(const Duration(milliseconds: 500));
-      _navegarParaCorridas();
-
+        // AdvancedNotificationService gerencia a navegação via navigatorKey
       }
     } catch (e) {
       debugPrint('❌ Erro ao inicializar Firebase Messaging: $e');
