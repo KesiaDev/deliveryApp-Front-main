@@ -221,7 +221,7 @@ class PaymentService {
       'corridaId': corridaId,
     };
 
-    final response = await dio.post('/privado/pagamento/boleto', data: body);
+    final response = await dio.post('/private/pagamento/boleto', data: body);
 
     if (response.statusCode == 200 || response.statusCode == 201) {
       return _BoletoApiResponse.fromJson(response.data as Map<String, dynamic>);

@@ -7,6 +7,8 @@ import 'package:delivery_front/empresa/corridas/sol_nova_corrida_page.dart';
 import 'package:delivery_front/home/home_empresa/home_page_empresa.dart';
 import 'package:delivery_front/home/widgets/active_project_card.dart';
 import 'package:delivery_front/home/widgets/task_column.dart';
+import 'package:delivery_front/modules/payments/models/empresa_payment_config.dart';
+import 'package:delivery_front/modules/payments/services/empresa_payment_service.dart';
 import 'package:delivery_front/shared/components/filter/filterscreen.dart';
 import 'package:delivery_front/shared/models/SaldosCorrida.dart';
 import 'package:delivery_front/shared/models/consultaRequest.dart';
@@ -280,10 +282,8 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                     subtitle: 'R\$ ${(corridasPagas.vlrTotal?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
                   ),
                   Visibility(
-                    visible: ApiBaseHelper.userSessao!.indTipo ==
-                            ApiBaseHelper.IND_TIP_PERFIL_99_ADMIN_SISTEMA
-                        ? true
-                        : false,
+                    visible: ApiBaseHelper.userSessao?.indTipo ==
+                            ApiBaseHelper.IND_TIP_PERFIL_99_ADMIN_SISTEMA,
                     child: Container(
                       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: ElevatedButton.icon(
@@ -323,45 +323,123 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                 ],
               ));
             } else {
-              return Container(
-                  child: Column(
+              // Pega codEmpresa para buscar config de pagamento
+              final codEmpr = (userNew.usuarioResp?.empresas?.isNotEmpty == true)
+                  ? userNew.usuarioResp!.empresas!.first.codEmpresa
+                  : null;
+
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: <Widget>[
                   SizedBox(height: 15.0),
                   TaskColumn(
                     icon: Icons.motorcycle_rounded,
                     title: 'Valor total de corridas',
                     subtitle:
-                        'R\$ ${(corridasApagar.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} a pagar. R\$ ${(corridasPagas.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} em andamento',
-                  ),
-                  SizedBox(
-                    height: 15.0,
-                  ),
-                  TaskColumn(
-                    icon: Icons.place,
-                    title: 'A pagar',
-                    subtitle: 'R\$ ${(corridasApagar.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
+                        'R\$ ${(corridasApagar.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} a pagar. R\$ ${(corridasPagas.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')} já pago',
                   ),
                   SizedBox(height: 15.0),
-                  TaskColumn(
-                    icon: Icons.check_circle_outline,
-                    title: 'Pago',
-                    subtitle: 'R\$ ${(corridasPagas.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
+
+                  // "A pagar" com badge do método de pagamento
+                  Stack(
+                    children: [
+                      TaskColumn(
+                        icon: Icons.place,
+                        title: 'A pagar',
+                        subtitle: 'R\$ ${(corridasApagar.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
+                      ),
+                      if (codEmpr != null)
+                        Positioned(
+                          top: 8,
+                          right: 8,
+                          child: FutureBuilder<EmpresaPaymentConfig>(
+                            future: EmpresaPaymentService.getConfig(codEmpr),
+                            builder: (_, cfgSnap) {
+                              if (!cfgSnap.hasData) return const SizedBox.shrink();
+                              final methods = cfgSnap.data!.acceptedMethods;
+                              String label = '';
+                              Color color = Colors.orange;
+                              if (methods.contains(EmpresaPayMethod.dinheiro)) {
+                                label = '💵 Dinheiro';
+                                color = Colors.green.shade700;
+                              } else if (methods.contains(EmpresaPayMethod.boleto)) {
+                                label = '📄 Boleto';
+                                color = Colors.orange.shade800;
+                              } else if (methods.contains(EmpresaPayMethod.pix)) {
+                                label = '⚡ PIX';
+                                color = const Color(0xFF43A047);
+                              } else if (methods.contains(EmpresaPayMethod.carteira)) {
+                                label = '👛 Carteira';
+                                color = const Color(0xFF1E88E5);
+                              }
+                              if (label.isEmpty) return const SizedBox.shrink();
+                              return Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: color.withOpacity(0.12),
+                                  borderRadius: BorderRadius.circular(20),
+                                  border: Border.all(color: color.withOpacity(0.4)),
+                                ),
+                                child: Text(
+                                  label,
+                                  style: GoogleFonts.poppins(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w600,
+                                    color: color,
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                    ],
                   ),
+
+                  SizedBox(height: 15.0),
+
+                  // "Pago" com explicação de quem confirma
+                  Stack(
+                    children: [
+                      TaskColumn(
+                        icon: Icons.check_circle_outline,
+                        title: 'Pago',
+                        subtitle: 'R\$ ${(corridasPagas.vlrTotalRestaurante?.toDouble() ?? 0.0).toStringAsFixed(2).replaceAll('.', ',')}',
+                      ),
+                      Positioned(
+                        top: 8,
+                        right: 8,
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                          decoration: BoxDecoration(
+                            color: Colors.grey.shade100,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: Colors.grey.shade300),
+                          ),
+                          child: Text(
+                            'Confirmado pelo motorista ou admin',
+                            style: GoogleFonts.poppins(
+                              fontSize: 10,
+                              color: Colors.grey.shade600,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+
+                  // Botão admin para confirmar pagamento
                   Visibility(
                     visible: ApiBaseHelper.userSessao!.indTipo ==
-                            ApiBaseHelper.IND_TIP_PERFIL_99_ADMIN_SISTEMA
-                        ? true
-                        : false,
+                            ApiBaseHelper.IND_TIP_PERFIL_99_ADMIN_SISTEMA,
                     child: Container(
                       margin: EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                       child: ElevatedButton.icon(
                         onPressed: () {
-                          if (corridasApagar != null &&
-                              (corridasApagar.vlrTotalRestaurante != null &&
-                                  corridasApagar.vlrTotalRestaurante! > 0)) {
+                          if (corridasApagar.vlrTotalRestaurante != null &&
+                              corridasApagar.vlrTotalRestaurante! > 0) {
                             showAlertDialogPagamento(context, corridasApagar, 2);
                           } else {
-                            _showToast(context, "Nenhum valor a ser pago");
+                            _showToast(context, "Nenhum valor a ser confirmado");
                           }
                         },
                         icon: Icon(
@@ -370,7 +448,7 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                           size: 18,
                         ),
                         label: Text(
-                          "Recebimento de pagamento",
+                          "Confirmar recebimento (Admin)",
                           style: GoogleFonts.poppins(
                             fontSize: 14,
                             fontWeight: FontWeight.w600,
@@ -389,7 +467,7 @@ class _SaldosPage extends State<SaldosPage> with WidgetsBindingObserver {
                     ),
                   ),
                 ],
-              ));
+              );
             }
           } else {
             return Container(

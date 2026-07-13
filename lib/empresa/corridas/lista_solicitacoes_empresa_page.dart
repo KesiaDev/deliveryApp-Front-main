@@ -213,7 +213,8 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
   @override
   void initState() {
     super.initState();
-    _loadData();
+    _future = widget.controller.buscaListaSolicitacoes(
+        indBuscaChamadosRaio: widget.indStatusDefault ?? -1, req: widget.req);
     // Auto-refresh a cada 15s para empresa ver mudanças de status em tempo real
     _autoRefreshTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (mounted) _loadData();
@@ -260,7 +261,7 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
       }
     }).catchError((_) {});
 
-    setState(() => _future = newFuture);
+    setState(() { _future = newFuture; });
   }
 
   @override
@@ -442,7 +443,12 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
     }
     return _customListItem(
       IconButton(
-          onPressed: () {},
+          onPressed: () {
+            ScaffoldMessenger.of(_context).showSnackBar(SnackBar(
+              content: Text('Status: ${Utils.getDesStatusCorrida(amigo.indStatusCorrida)}'),
+              duration: const Duration(seconds: 2),
+            ));
+          },
           icon: Utils.getIconStatusCorrida(amigo.indStatusCorrida)),
       title,
       desMotorista,

@@ -34,7 +34,8 @@ class _AvailableRidesScreenState extends State<AvailableRidesScreen> {
   static const _textPrimary = Color(0xFF1A1A1A);
   static const _textSecondary = Color(0xFF757575);
 
-  static const double _maxRadiusKm = 25.0; // raio_busca_corridas
+  double get _maxRadiusKm =>
+      (ApiBaseHelper.userSessao?.configSys?.raioBuscaCorridas ?? 25).toDouble();
 
   GoogleMapController? _mapController;
   final Set<Marker> _markers = {};

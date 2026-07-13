@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
 import 'package:delivery_front/motorista/corridas/lista_solicitacoes_motorista_controller.dart';
@@ -8,12 +9,16 @@ import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
 import 'package:delivery_front/shared/components/Utils.dart';
 import 'package:delivery_front/shared/services/local_storage_service.dart';
+import 'package:delivery_front/modules/cod/models/cod_model.dart';
+import 'package:delivery_front/modules/cod/screens/pendencias_motorista_screen.dart';
+import 'package:delivery_front/modules/cod/services/cod_service.dart';
 import 'theme_components.dart';
 import 'app_drawer.dart';
 import 'corrida_card.dart';
 import 'empty_state.dart';
 import 'ride_request_overlay.dart';
 import 'corrida_andamento_page.dart';
+import 'package:delivery_front/ui/corridas_list_page.dart';
 
 class HomePageModern extends StatefulWidget {
   final Usuario? user;
@@ -43,6 +48,13 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
   final Set<int> _shownRideIds = {};
   bool _isOverlayShowing = false;
 
+  // COD — pendências de cobrança na entrega
+  List<PendenciaMotorista> _pendenciasCod = [];
+  StreamSubscription<List<PendenciaMotorista>>? _codSub;
+  Timer? _codCountdownTimer;
+  // Atualizado a cada segundo para forçar rebuild do countdown
+  int _codTick = 0;
+
   // Persistência de corridas mostradas para evitar repetição ao reabrir app
   static const String _SHOWN_RIDES_KEY = 'motorista_shown_ride_ids';
 
@@ -51,27 +63,53 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _controller = ListaSolicitacoesMotoristaController(context);
-    _loadShownRideIds();
-    _loadData();
-    _startPolling();
+    _startCodStream();
+    // Garante que os IDs de corridas já recusadas são carregados ANTES de
+    // buscar novas corridas, evitando que corridas recusadas reapareçam.
+    _loadShownRideIds().then((_) {
+      if (mounted) {
+        _loadData();
+        _startPolling();
+      }
+    });
+  }
+
+  void _startCodStream() {
+    final codMotorista = ApiBaseHelper.userSessao?.codUsuario;
+    if (codMotorista == null) return;
+    _codSub = CodService.streamPendencias(codMotorista).listen((pends) {
+      if (!mounted) return;
+      setState(() => _pendenciasCod = pends);
+      // Inicia timer de 1 seg apenas se houver pendência aberta
+      if (pends.any((p) => p.isAberta) && _codCountdownTimer == null) {
+        _codCountdownTimer = Timer.periodic(const Duration(seconds: 1), (_) {
+          if (mounted) setState(() => _codTick++);
+          // Para o timer se não há mais pendências abertas
+          if (_pendenciasCod.every((p) => !p.isAberta)) {
+            _codCountdownTimer?.cancel();
+            _codCountdownTimer = null;
+          }
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
     _pollTimer?.cancel();
+    _codSub?.cancel();
+    _codCountdownTimer?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     super.dispose();
   }
 
-  void _loadShownRideIds() {
-    // Carrega IDs de corridas já mostradas ao motorista (persiste entre reopens)
+  Future<void> _loadShownRideIds() async {
     try {
-      LocalStorageService.getString(_SHOWN_RIDES_KEY).then((jsonStr) {
-        if (jsonStr != null && jsonStr.isNotEmpty) {
-          final ids = jsonStr.split(',').map((s) => int.tryParse(s)).whereType<int>();
-          _shownRideIds.addAll(ids);
-        }
-      });
+      final jsonStr = await LocalStorageService.getString(_SHOWN_RIDES_KEY);
+      if (jsonStr != null && jsonStr.isNotEmpty) {
+        final ids = jsonStr.split(',').map((s) => int.tryParse(s)).whereType<int>();
+        _shownRideIds.addAll(ids);
+      }
     } catch (_) {}
   }
 
@@ -111,6 +149,8 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
   }
 
   void _showRideRequestOverlay(SolicitacaoMotorista corrida) {
+    if (!mounted) return;
+    if (corrida.numSeq == null) return;
     _isOverlayShowing = true;
     RideRequestOverlay.show(
       context,
@@ -122,10 +162,8 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
           ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA,
         );
         if (sucess && mounted) {
-          // Atualiza o status na corrida local para 1 (aceita)
           corrida.indStatusCorrida = ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA;
           _loadData();
-          // Navega direto para a tela de corrida em andamento com auto-navegação GPS
           Navigator.push(
             context,
             MaterialPageRoute(
@@ -216,7 +254,10 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
           .timeout(const Duration(seconds: 12), onTimeout: () => []);
     } catch (_) {}
 
-    if (!mounted) return;
+    if (!mounted) {
+      _isLoading = false;
+      return;
+    }
 
     setState(() {
       _novasCorridas = novasCorridas;
@@ -235,7 +276,9 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
       if (id > 0 && !_shownRideIds.contains(id)) {
         await _saveShownRideId(id);
         WidgetsBinding.instance.addPostFrameCallback((_) {
-          if (mounted) _showRideRequestOverlay(corrida);
+          try {
+            if (mounted) _showRideRequestOverlay(corrida);
+          } catch (_) {}
         });
       }
     }
@@ -261,7 +304,32 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
 
     final theme = Theme.of(context);
     final onSurface = theme.colorScheme.onSurface;
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (bool didPop, dynamic result) async {
+        if (didPop) return;
+        final shouldExit = await showDialog<bool>(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Confirmar'),
+            content: const Text('Deseja fechar o app?'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(false),
+                child: const Text('Não'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.of(ctx).pop(true),
+                child: const Text('Sim', style: TextStyle(color: Color(0xFFE53935))),
+              ),
+            ],
+          ),
+        );
+        if (shouldExit == true) {
+          SystemNavigator.pop();
+        }
+      },
+      child: Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
       appBar: AppAppBar(
         title: user?.desNome ?? "Motorista",
@@ -276,6 +344,9 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
           children: [
             // ── BANNER DE CORRIDA ATIVA ─────────────────────────────────────
             if (_corridaAtiva != null) _buildActiveBanner(_corridaAtiva!),
+
+            // ── BANNER COD — countdown devolução ───────────────────────────
+            if (_pendenciasCod.isNotEmpty) _buildCodCountdownBanner(),
 
             // ── CONTEÚDO PRINCIPAL ──────────────────────────────────────────
             Expanded(
@@ -330,13 +401,13 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
                             children: [
                               IconButton(
                                 onPressed: () {
-                                  // Navega para a página de novas corridas (notificações)
-                                  Navigator.pushNamed(
+                                  Navigator.push(
                                     context,
-                                    AppRoutes.corridas,
-                                    arguments: {
-                                      'indTipoDefault': ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA,
-                                    },
+                                    MaterialPageRoute(
+                                      builder: (_) => CorridasListPage(
+                                        indTipoDefault: ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA,
+                                      ),
+                                    ),
                                   );
                                 },
                                 icon: Icon(Icons.notifications_none, color: onSurface.withOpacity(0.54)),
@@ -542,6 +613,98 @@ class _HomePageModernState extends State<HomePageModern> with WidgetsBindingObse
             ), // Expanded
           ],
         ), // Column
+      ),
+    ), // Scaffold
+    ); // PopScope
+  }
+
+  // ── Banner COD — contagem regressiva para devolução ──────────────────────
+
+  Widget _buildCodCountdownBanner() {
+    // Pega a pendência mais urgente (menor prazo)
+    final pend = _pendenciasCod.reduce((a, b) =>
+        a.dthPrazo.isBefore(b.dthPrazo) ? a : b);
+
+    final diff = pend.dthPrazo.difference(DateTime.now());
+    final totalSecs = diff.inSeconds;
+    final vencido = totalSecs <= 0;
+
+    final mins = vencido ? 0 : (totalSecs ~/ 60);
+    final secs = vencido ? 0 : (totalSecs % 60);
+    final countdownStr = '${mins.toString().padLeft(2, '0')}:${secs.toString().padLeft(2, '0')}';
+
+    // Cor muda conforme urgência
+    final Color bgColor = vencido
+        ? const Color(0xFFB71C1C)
+        : totalSecs < 600
+            ? const Color(0xFFE53935) // menos de 10 min — vermelho
+            : const Color(0xFFE65100); // mais de 10 min — laranja escuro
+
+    return GestureDetector(
+      onTap: () {
+        final cod = ApiBaseHelper.userSessao?.codUsuario;
+        if (cod == null) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => PendenciasMotoristaScreen(codMotorista: cod),
+          ),
+        );
+      },
+      child: Container(
+        width: double.infinity,
+        color: bgColor,
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+        child: Row(
+          children: [
+            // Ícone pulsante
+            const Icon(Icons.warning_amber_rounded, color: Colors.white, size: 22),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    vencido
+                        ? '⛔ Prazo vencido — novas corridas bloqueadas'
+                        : '💰 Devolva R\$ ${pend.vlrPendente.toStringAsFixed(2).replaceAll('.', ',')} para ${pend.empresaName}',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontWeight: FontWeight.w700,
+                      fontSize: 13,
+                    ),
+                  ),
+                  Text(
+                    vencido
+                        ? 'Entre em contato com a empresa imediatamente'
+                        : 'Tempo restante para devolver: $countdownStr',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.9),
+                      fontSize: 11,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            // Contador grande
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.20),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                vencido ? 'VENCIDO' : countdownStr,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontWeight: FontWeight.w900,
+                  fontSize: 16,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

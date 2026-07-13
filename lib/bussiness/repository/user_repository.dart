@@ -17,6 +17,7 @@ import 'package:delivery_front/shared/models/motorista/models/lista_solicitacoes
 import 'package:delivery_front/shared/models/motorista/models/lista_solicitacoes_motorista.dart';
 import 'package:delivery_front/shared/models/motorista/models/motoristas_proximos.dart';
 import 'package:delivery_front/shared/models/motorista/motorista_cem.dart';
+import 'package:delivery_front/bussiness/service/admin_service.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
@@ -288,40 +289,19 @@ class UserRepository {
   }
 
   Future<List<Cem>?> buscaCemMotorista(int codMotorista) async {
-    final response =
-        await _dio.post("/api/buscacems", data: {"codMotorista": codMotorista});
-    // ignore: deprecated_member_use
-    List<Cem> listResponse = [];
-    MotoristaCem retorno = MotoristaCem.fromJson(response.data);
-    if (retorno.listaCem != null)
-      return retorno.listaCem;
-    else
-      listResponse;
-    // List<Cem> listResponse = [];
-    // Cem cem1 = Cem(
-    //     codCem: 1,
-    //     codUsuario: 244,
-    //     desNome: "Wagner",
-    //     indAguardandoAutorizacao: true,
-    //     indAtivo: 1);
-    // listResponse.add(cem1);
-
-    // Cem cem2 = Cem(
-    //     codCem: 2,
-    //     codUsuario: 44,
-    //     desNome: "Carolina",
-    //     indAguardandoAutorizacao: false,
-    //     indAtivo: 0);
-    // listResponse.add(cem2);
-
-    // Cem cem3 = Cem(
-    //     codCem: 3,
-    //     codUsuario: 4444,
-    //     desNome: "Eduardo",
-    //     indAguardandoAutorizacao: true,
-    //     indAtivo: 1);
-    // listResponse.add(cem3);
-    // return listResponse;
+    try {
+      final response =
+          await _dio.post("/api/buscacems", data: {"codMotorista": codMotorista});
+      List<Cem> listResponse = [];
+      MotoristaCem retorno = MotoristaCem.fromJson(response.data);
+      if (retorno.listaCem != null)
+        return retorno.listaCem;
+      else
+        return listResponse;
+    } catch (e) {
+      if (kDebugMode) debugPrint('Erro ao buscar CEMs: $e');
+      return [];
+    }
   }
 
   Future<void> updateCem(Cem cemUpdate, int codMotorista) async {
@@ -341,7 +321,7 @@ class UserRepository {
       int codMotorista,
       {int tipStatus = 0}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     final response = await _dio
         .get("/private/corridas/motorista/${codMotorista}/${tipStatus}");
@@ -370,7 +350,7 @@ class UserRepository {
   Future<List<SolicitacaoMotorista>> buscaSolicitacoesEmpresa(int codMotorista,
       {int tipStatus = -1, ConsultaRequest? req, bool isAdm = false}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     Map<String, dynamic>? queryParameters = Map<String, dynamic>();
 
@@ -414,7 +394,7 @@ class UserRepository {
   Future<List<SolicitacaoMotorista>> buscaNovasSolicitacoesMotorista(
       int codUsuario) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     // BUG-004 fix: endpoint correto para corridas disponíveis do motorista
     final response = await _dio.get("/private/corridas/motorista/${codUsuario}/0");
 
@@ -441,18 +421,22 @@ class UserRepository {
 
   Future<void> chamaPedidoDeSocorro(
       Usuario motorista, double desLatitude, double desLongitude) async {
-    final response = await _dio.post("/chamados/criarchamado", data: {
-      "codMotorista": motorista.codUsuario,
-      "desLatitude": desLatitude,
-      "desLongitude": desLongitude
-    });
-    // ignore: deprecated_member_use
+    try {
+      await _dio.post("/chamados/criarchamado", data: {
+        "codMotorista": motorista.codUsuario,
+        "desLatitude": desLatitude,
+        "desLongitude": desLongitude
+      });
+    } catch (e) {
+      if (kDebugMode) debugPrint('Erro ao chamar socorro: $e');
+      rethrow;
+    }
   }
 
   Future<int?> chamaNovaCorrida(
       Usuario motorista, SolicitacaoMotorista sol) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     sol.codEmpresa = (motorista.usuarioResp?.empresas?.isNotEmpty == true)
         ? motorista.usuarioResp!.empresas!.first.codEmpresa
@@ -487,17 +471,14 @@ class UserRepository {
   Future<void> updateLocalizacaoMotorista(
       Usuario motorista, double desLatitude, double desLongitude) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
-    final response = await _dio.post(
-      "/private/user/${motorista.codUsuario}/atualizarlocal/$desLatitude/$desLongitude",
-    );
-
-    // final response = await _dio.post("/private/user/${motorista.codUsuario}/atualizarlocal/${desLatitude}/${desLongitude}", data: {
-    //   "codMotorista": motorista.codUsuario,
-    //   "desLatitude": desLatitude,
-    //   "desLongitude": desLongitude,
-    // });
-    // ignore: deprecated_member_use
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
+    try {
+      await _dio.post(
+        "/private/user/${motorista.codUsuario}/atualizarlocal/$desLatitude/$desLongitude",
+      );
+    } catch (e) {
+      if (kDebugMode) debugPrint('Erro ao atualizar localização: $e');
+    }
   }
 
   Future<List<MotoristasProximos>> buscaMotoristaProximos(
@@ -797,27 +778,22 @@ class UserRepository {
 
   Future<void> finalizarChamado(int numSeqChamado, int indStatusCorrida, {String? motivoCancelamento}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
-    
-    // Se for cancelamento e tiver motivo, envia no body
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
+
     if (indStatusCorrida == ApiBaseHelper.IND_STATUS_CORRIDA_4_CANCELADA && motivoCancelamento != null) {
-      final response = await _dio.post(
+      await _dio.post(
         "/private/corridas/corrida/$numSeqChamado/$indStatusCorrida",
-        data: {
-          'desMotivoCancelamento': motivoCancelamento,
-        },
+        data: {'desMotivoCancelamento': motivoCancelamento},
       );
     } else {
-      final response = await _dio
-          .post("/private/corridas/corrida/$numSeqChamado/$indStatusCorrida");
+      await _dio.post("/private/corridas/corrida/$numSeqChamado/$indStatusCorrida");
     }
-    // ignore: deprecated_member_use
   }
 
   Future<void> aceitarCorrida(int numSeqChamado, int indStatusCorrida) async {
     Usuario? user = ApiBaseHelper.userSessao;
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     final codMot = (user!.usuarioResp?.motoristas?.isNotEmpty == true)
         ? user.usuarioResp!.motoristas!.first.codMotorista
         : null;
@@ -868,7 +844,7 @@ class UserRepository {
       DateTime? dtaFim,
       bool? isAdm}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     Map<String, dynamic>? queryParameters = Map<String, dynamic>();
 
@@ -961,7 +937,7 @@ class UserRepository {
       DateTime? dtaFim,
       bool? isAdm}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     Map<String, dynamic>? queryParameters = Map<String, dynamic>();
 
@@ -1025,7 +1001,7 @@ class UserRepository {
 
   Future<void> atualizaStatusOnOff(UsuarioResp motorista, int indStatus) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     final response = await _dio.post(
       "/private/user/status/${motorista.codUsuario}/$indStatus",
     );
@@ -1041,7 +1017,7 @@ class UserRepository {
   Future<void> realizaPagamentoMotorista(
       String numSeqChamado, int codMotorista) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     final response = await _dio.post(
         "/private/corridas/corridas/valores/pagamento/${codMotorista}/${numSeqChamado}");
@@ -1051,7 +1027,7 @@ class UserRepository {
   Future<void> realizaConfirmaRecebimentoEstabelecimento(
       String numSeqChamado, int codEmpresa) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     final response = await _dio.post(
         "/private/corridas/corridas/valores/recebimento/${codEmpresa}/${numSeqChamado}");
@@ -1062,7 +1038,7 @@ class UserRepository {
       String? email, String? senha, CadastroCemRequest login,
       {Usuario? userInsert}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     final response = await _dio.post(
       "/private/user/atualizaUser",
       data: json.encode(userInsert?.usuarioResp?.toJson()),
@@ -1101,7 +1077,7 @@ class UserRepository {
 
   Future<void> atualizaConfigSys(ConfigSys config) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     // ignore: deprecated_member_use
 
     final response = await _dio.post(
@@ -1112,7 +1088,7 @@ class UserRepository {
 
   Future<ConfigSys> buscaConfigSys() async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     // ignore: deprecated_member_use
 
     final response = await _dio.get("/private/sys/config");
@@ -1125,21 +1101,23 @@ class UserRepository {
 
   Future<double?> buscaVlrTaxa(double kmCorrida) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     // ignore: deprecated_member_use
 
     final response = await _dio.get("/private/sys/vlrTaxa/$kmCorrida");
 
-    double? retorno = response.data as double?;
+    double? retorno = (response.data as num?)?.toDouble();
     return retorno;
   }
 
-  Future<double?> buscaConfigTaxas() async {
+  Future<List<ValoresTaxas>> buscaConfigTaxas() async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
-    // ignore: deprecated_member_use
-
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     final response = await _dio.get("/private/sys/vlrTaxa/findAll");
+    if (response.data is! List) return [];
+    return (response.data as List)
+        .map<ValoresTaxas>((item) => ValoresTaxas.fromJson(item))
+        .toList();
   }
 
   /// Solicita recuperação de senha via email
@@ -1175,7 +1153,7 @@ class UserRepository {
   /// Altera a senha do usuário logado
   Future<void> alterarSenha(AlteracaoSenhaRequest request) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     
     try {
       final response = await _dio.post(

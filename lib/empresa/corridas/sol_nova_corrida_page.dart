@@ -13,7 +13,6 @@ import 'package:delivery_front/modules/payments/services/payment_service.dart';
 import 'package:delivery_front/shared/components/loading_dialog.dart';
 import 'package:delivery_front/shared/models/TipoCorrida.dart';
 import 'package:delivery_front/shared/models/motorista/models/lista_solicitacoes.dart';
-import 'package:delivery_front/shared/widgets/agendamento_corrida_widget.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_polyline_points/flutter_polyline_points.dart';
@@ -408,16 +407,6 @@ class _SolNovaCorridaPageState extends State<SolNovaCorridaPage> {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: Color(0xFFF8F6FB),
-      drawer: Drawer(
-        backgroundColor: Colors.white,
-        child: ListView(
-          padding: EdgeInsets.zero,
-          children: [
-            // Header do drawer pode ser adicionado aqui se necessário
-            // Por enquanto, apenas garantir que o drawer existe
-          ],
-        ),
-      ),
       appBar: AppBar(
         backgroundColor: Colors.white,
         elevation: 0,
@@ -754,7 +743,21 @@ class _AddressTile extends State<AddressTile> with TickerProviderStateMixin {
 
   Future<void> _initOriginThenLoad() async {
     await _initOrigin();
-    if (mounted) _loadRouteAndPrice();
+    if (!mounted) return;
+    try {
+      await _loadRouteAndPrice();
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _loading = false);
+      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+        content: Text(
+          'Não foi possível calcular o preço da corrida. Verifique as taxas configuradas.',
+          style: GoogleFonts.poppins(),
+        ),
+        backgroundColor: Colors.red,
+        duration: const Duration(seconds: 5),
+      ));
+    }
   }
 
   @override
@@ -816,7 +819,7 @@ class _AddressTile extends State<AddressTile> with TickerProviderStateMixin {
             1000;
     final km = double.parse(
         (totalDist > 0 ? totalDist : straight).toStringAsFixed(2));
-    double kmAux = km < 3.5 ? 1.0 : km;
+    double kmAux = km;
 
     // Preço
     final config = ApiBaseHelper.userSessao?.configSys;
@@ -824,7 +827,8 @@ class _AddressTile extends State<AddressTile> with TickerProviderStateMixin {
         config?.vlrKmRodado ??
         1.0;
     double vlrTaxaApp = config?.vlrTaxaApp ?? 0.0;
-    final vlr = kmAux * vlrTaxaKm;
+    // vlrTaxaKm é taxa FLAT "por corrida" (não por km) — usar diretamente
+    final vlr = vlrTaxaKm;
     vlrTaxaApp = vlr * (vlrTaxaApp / 100);
 
     if (!mounted) return;
@@ -1180,7 +1184,6 @@ class _AddressTile extends State<AddressTile> with TickerProviderStateMixin {
 void _dropDownItemSelected(TipoCorrida novoItem) {
   indTipoPgto = novoItem;
   _desTipoPgto = novoItem.desTipo;
-  _desTipoPgto = "teste";
 }
 
 showAlertDialog(
@@ -1205,6 +1208,7 @@ showAlertDialog(
   String? obsEntrega;
   String? complementoEndereco;
   DateTime? dataAgendamento;
+  bool _isAgendado = false;
   // set up the buttons
   Widget cancelButton = TextButton(
     child: Text("Cancelar"),
@@ -1219,6 +1223,11 @@ showAlertDialog(
         if (obsEntrega == null || obsEntrega!.trim().isEmpty) {
           LoginControler.showToast(context,
               "Necessário adicionar o nome do cliente: Telefone de contato, quem irá receber e etc...");
+          return;
+        }
+
+        if (_isAgendado && dataAgendamento == null) {
+          LoginControler.showToast(context, "Selecione a data e horário do agendamento.");
           return;
         }
 
@@ -1500,12 +1509,6 @@ showAlertDialog(
             decoration: InputDecoration(hintText: "Complemento do endereço"),
           ),
           SizedBox(height: 16),
-          AgendamentoCorridaWidget(
-            dataAgendamentoInicial: dataAgendamento,
-            onDataSelecionada: (DateTime? data) {
-              dataAgendamento = data;
-            },
-          ),
           // ── Cobrança na Entrega ────────────────────────────────────
           const Divider(height: 24),
           Row(
@@ -1570,6 +1573,100 @@ showAlertDialog(
                 style: TextStyle(fontSize: 11, color: Colors.orange.shade900),
               ),
             ),
+          ],
+
+          // ── Agendamento ───────────────────────────────────────────
+          const Divider(height: 24),
+          Row(
+            children: [
+              Checkbox(
+                value: _isAgendado,
+                activeColor: const Color(0xFF3949AB),
+                onChanged: (v) => setState(() {
+                  _isAgendado = v ?? false;
+                  if (!_isAgendado) dataAgendamento = null;
+                }),
+              ),
+              const Expanded(
+                child: Text(
+                  '🕐 Agendar para depois',
+                  style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ),
+            ],
+          ),
+          if (_isAgendado) ...[
+            const SizedBox(height: 8),
+            // Botão para selecionar data e hora
+            OutlinedButton.icon(
+              icon: const Icon(Icons.calendar_today_rounded, size: 18),
+              label: Text(
+                dataAgendamento == null
+                    ? 'Selecionar data e horário'
+                    : '${dataAgendamento!.day.toString().padLeft(2,'0')}/${dataAgendamento!.month.toString().padLeft(2,'0')}/${dataAgendamento!.year}  ${dataAgendamento!.hour.toString().padLeft(2,'0')}:${dataAgendamento!.minute.toString().padLeft(2,'0')}',
+                style: const TextStyle(fontSize: 13),
+              ),
+              style: OutlinedButton.styleFrom(
+                foregroundColor: const Color(0xFF3949AB),
+                side: const BorderSide(color: Color(0xFF3949AB)),
+              ),
+              onPressed: () async {
+                final now = DateTime.now();
+                final minDate = now.add(const Duration(minutes: 10));
+
+                final pickedDate = await showDatePicker(
+                  context: context,
+                  initialDate: dataAgendamento ?? minDate,
+                  firstDate: minDate,
+                  lastDate: now.add(const Duration(days: 30)),
+                  helpText: 'Selecione a data de coleta',
+                  locale: const Locale('pt', 'BR'),
+                );
+                if (pickedDate == null) return;
+
+                final pickedTime = await showTimePicker(
+                  context: context,
+                  initialTime: dataAgendamento != null
+                      ? TimeOfDay(hour: dataAgendamento!.hour, minute: dataAgendamento!.minute)
+                      : TimeOfDay(hour: now.hour + 1, minute: 0),
+                  helpText: 'Selecione o horário de coleta',
+                );
+                if (pickedTime == null) return;
+
+                setState(() {
+                  dataAgendamento = DateTime(
+                    pickedDate.year,
+                    pickedDate.month,
+                    pickedDate.day,
+                    pickedTime.hour,
+                    pickedTime.minute,
+                  );
+                });
+              },
+            ),
+            if (dataAgendamento != null) ...[
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: Colors.blue.shade50,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(color: Colors.blue.shade200),
+                ),
+                child: Row(
+                  children: [
+                    Icon(Icons.schedule_rounded, size: 16, color: Colors.blue.shade700),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'Motorista será notificado 15 min antes de ${dataAgendamento!.hour.toString().padLeft(2,'0')}:${dataAgendamento!.minute.toString().padLeft(2,'0')} para buscar no horário certo.',
+                        style: TextStyle(fontSize: 11, color: Colors.blue.shade800),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
           ],
           ],
          ),

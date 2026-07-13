@@ -20,6 +20,7 @@ import 'package:delivery_front/shared/models/motorista/models/motoristas_proximo
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:flash/flash.dart';
 import 'package:flash/flash_helper.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:geocoding/geocoding.dart' as geo;
@@ -68,6 +69,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   SolicitacaoMotorista? _activeRide;
   Timer? _activeRideTimer;
 
+  Future<int>? _codPendenciasFuture;
+
   Marker? marker;
   Circle? circle;
   GoogleMapController? _controller;
@@ -91,14 +94,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (Platform.isMacOS || _isDisposed) return;
 
     _gpsVerificationTimer?.cancel();
-    _gpsVerificationTimer = Timer.periodic(const Duration(seconds: 5), (timer) async {
+    _gpsVerificationTimer = Timer.periodic(const Duration(seconds: 15), (timer) async {
       if (_isDisposed || !mounted) {
         timer.cancel();
         return;
       }
 
       if (Platform.isIOS) {
-        // iOS handling pode ser adicionado aqui se necessário
         return;
       }
 
@@ -310,9 +312,13 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<void> carregaPerfil() async {
-    user = ApiBaseHelper.userSessao!;
-    if (user == null) user = (await _userService.getCurrentUser())!;
-    if (user == null) user = new Usuario();
+    user = ApiBaseHelper.userSessao ?? (await _userService.getCurrentUser()) ?? Usuario();
+
+    if (mounted && user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA) {
+      setState(() {
+        _codPendenciasFuture = CodService.countPendenciasAbertas(user.codUsuario ?? 0);
+      });
+    }
 
     if (Platform.isAndroid) {
       final androidInfo = await DeviceInfoPlugin().androidInfo;
@@ -433,7 +439,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   // }
 
   Future<void> verificaStatus() async {
-    //SystemAlertWindow.requestPermissions;
+    try {
+      await ph.Permission.location.request();
+    } catch (_) {}
   }
 
   static final CameraPosition initialLocation = CameraPosition(
@@ -554,8 +562,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           ApiBaseHelper.lat = newLocalData.latitude!;
           ApiBaseHelper.long = newLocalData.longitude!;
         }
-        print(
-            'atualizei lat=${ApiBaseHelper.lat} e long=${ApiBaseHelper.long}');
+        debugPrint('atualizei lat=${ApiBaseHelper.lat} e long=${ApiBaseHelper.long}');
       }
     }
 
@@ -563,6 +570,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
     if (this.mounted) {
       this.setState(() {
         if (user.indTipo == 1) {
+          _markers.removeWhere((m) => m.markerId.value == "home");
           marker = Marker(
               markerId: MarkerId("home"),
               position: latlng,
@@ -590,35 +598,26 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
   }
 
   Future<bool> _onBackPressed() async {
-    final route = ModalRoute.of(context);
-    final pageName = route?.settings.name ?? "";
-    var page = log(pageName);
-    var can = Navigator.canPop(context);
-    if (can) {
-      //  Navigator.pop(context);
-      return true;
-    } else {
-      return await showDialog<bool>(
-        context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Confirmação'),
-          content: const Text('Deseja fechar o app?'),
-          actions: <Widget>[
-            TextButton(
-              onPressed: () => Navigator.of(context).pop(false),
-              child: const Text("NÃO"),
-            ),
-            TextButton(
-              onPressed: () {
-                Navigator.of(context).pop(false);
-                SystemNavigator.pop();
-              },
-              child: const Text("SIM", style: TextStyle(color: Colors.red)),
-            ),
-          ],
-        ),
-      ) ?? false;
-    }
+    return await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Confirmação'),
+        content: const Text('Deseja fechar o app?'),
+        actions: <Widget>[
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("NÃO"),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.of(context).pop(false);
+              SystemNavigator.pop();
+            },
+            child: const Text("SIM", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    ) ?? false;
   }
 
   Future<void> atualizaMotoristasProximos(var newLocalData) async {
@@ -718,7 +717,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             child: FlashBar(
               controller: controller,
               title: Text(
-                ((sol.dbEmpresasByCodEmpresa!.desNomeFantasia ?? "") +
+                ((sol.dbEmpresasByCodEmpresa?.desNomeFantasia ?? "Empresa") +
                     " solicitou uma nova corrida"),
                 style: TextStyle(
                   color: Colors.black,
@@ -730,7 +729,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   (" Local da entrega - ${sol.desEnderecoEntrega} ") +
                   " - Data chamada " +
                   ApiBaseHelper.getDtaFormatada(sol.dthSolicitacao) +
-                  " - Valor da corrida: ${sol.vlrTotalMotorista!}"),
+                  " - Valor da corrida: ${sol.vlrTotalMotorista ?? 0}"),
               indicatorColor: Colors.black,
               icon: Icon(Icons.info_outline),
               primaryAction: TextButton(
@@ -753,8 +752,8 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                               onMapTap: (map) {
                                 map.showDirections(
                                   destination: mapN.Coords(
-                                      sol.dbEmpresasByCodEmpresa!.desLatitude!,
-                                      sol.dbEmpresasByCodEmpresa!.desLongitude!),
+                                      sol.dbEmpresasByCodEmpresa?.desLatitude ?? 0.0,
+                                      sol.dbEmpresasByCodEmpresa?.desLongitude ?? 0.0),
                                 );
                               },
                             );
@@ -825,10 +824,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       canPop: false,
       onPopInvokedWithResult: (bool didPop, dynamic result) async {
         if (!didPop) {
-          final backResult = await _onBackPressed();
-          if (backResult == true && context.mounted) {
-            Navigator.of(context).pop();
-          }
+          await _onBackPressed();
         }
       },
       child: _buildHomeContent(context),
@@ -860,7 +856,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               // Badge de pendências CoD — aparece apenas quando há pendências
               if (user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA)
                 FutureBuilder<int>(
-                  future: CodService.countPendenciasAbertas(user.codUsuario ?? 0),
+                  future: _codPendenciasFuture,
                   builder: (_, snap) {
                     final count = snap.data ?? 0;
                     if (count == 0) return const SizedBox.shrink();
@@ -1277,7 +1273,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                   ),
                 ),
                 Visibility(
-                    visible: user.indTipo == 1 ? true : true,
+                    visible: true,
                     child: ListTile(
                         leading: Icon(Icons.person_outline, color: Color(0xFF9E9E9E)),
                         title: Text(
@@ -1514,7 +1510,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
                 ),
                 Divider(height: 1, color: Color(0xFFE6E7EB)),
                 Visibility(
-                  visible: user.indTipo == 1 ? true : true,
+                  visible: true,
                   child: ListTile(
                       leading: Icon(Icons.logout_outlined, color: Color(0xFF9E9E9E)),
                       title: Text(
@@ -1706,7 +1702,7 @@ class botaoPanicoSocorro extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Visibility(
-      visible: user.indTipo == 1 ? true : true,
+      visible: user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA,
       child: Container(
         height: 450,
         width: 450,
@@ -1738,14 +1734,16 @@ class botaoPanicoSocorro extends StatelessWidget {
 }
 
 Future<void> callSocorro(int codMotorista) async {
-  // print(
-  //     "Chamei o socorro lat=${ApiBaseHelper.userSessao!.codMotorista} e long=${ApiBaseHelper.long}");
-  // UserService _userService = UserService();
-  // Usuario user = Usuario();
-  // user.codMotorista = codMotorista;
-  // await _userService.novoPedidoDeSocorroFlutuante(user);
-
-  // await _userService.novoPedidoDeSocorroBlut();
+  try {
+    final userService = UserService();
+    final user = ApiBaseHelper.userSessao ?? Usuario();
+    if (user.codUsuario != null) {
+      await userService.novoPedidoDeSocorro(
+          ApiBaseHelper.lat, ApiBaseHelper.long);
+    }
+  } catch (e) {
+    if (kDebugMode) debugPrint('Erro ao chamar socorro: $e');
+  }
 }
 
 ///
@@ -1760,11 +1758,6 @@ void callBackFunction(String tag) {
     callSocorro(int.parse(codMotorista));
   }
   switch (tag) {
-    case "simple_button":
-      int codMotorista = tag.split("#").elementAt(1) as int;
-      print("Simple button has been clicked");
-      callSocorro(codMotorista);
-      break;
     case "focus_button":
       print("Focus button has been clicked");
       //SystemAlertWindow.closeSystemWindow();

@@ -369,7 +369,12 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
 
     return _customListItem(
       IconButton(
-          onPressed: () {},
+          onPressed: () {
+            ScaffoldMessenger.of(_context).showSnackBar(SnackBar(
+              content: Text('Status: ${Utils.getDesStatusCorrida(amigo.indStatusCorrida)}'),
+              duration: const Duration(seconds: 2),
+            ));
+          },
           icon: Utils.getIconStatusCorrida(amigo.indStatusCorrida)),
       title,
       text,

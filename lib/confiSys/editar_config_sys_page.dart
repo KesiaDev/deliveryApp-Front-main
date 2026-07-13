@@ -79,6 +79,16 @@ class _EditarCadastroPage extends State<EditarConfigSysPage> {
   }
 
   @override
+  void dispose() {
+    _seq.dispose();
+    _vlrKmRodado.dispose();
+    _vlrPercentualDescontoMotorista.dispose();
+    _vlrTaxaApp.dispose();
+    _raioBuscaCorridas.dispose();
+    super.dispose();
+  }
+
+  @override
   Widget build(BuildContext context) {
     final scaffoldKey = GlobalKey<ScaffoldState>();
     return Scaffold(

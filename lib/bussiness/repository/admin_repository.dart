@@ -10,7 +10,7 @@ class AdminRespository {
 
   Future<List<Empresa>> buscaEmpresas({int codEmpresa = -1}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     Map<String, dynamic>? queryParameters = Map<String, dynamic>();
 
@@ -18,7 +18,8 @@ class AdminRespository {
 
     //Empresa.fromJson(response.data);
 
-    return response.data
+    if (response.data is! List) return [];
+    return (response.data as List)
         .map<Empresa>((item) => Empresa.fromJson(item))
         .toList();
 
@@ -27,7 +28,7 @@ class AdminRespository {
 
   Future<List<Motorista>> buscaMotoristas({int codEmpresa = -1}) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
 
     Map<String, dynamic>? queryParameters = Map<String, dynamic>();
 
@@ -35,7 +36,8 @@ class AdminRespository {
 
     //Empresa.fromJson(response.data);
 
-    return response.data
+    if (response.data is! List) return [];
+    return (response.data as List)
         .map<Motorista>((item) => Motorista.fromJson(item))
         .toList();
 
@@ -44,7 +46,7 @@ class AdminRespository {
 
   Future<void> atualizaBloqueio(int? codUsuario, int indStatus) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     final response = await _dio.post(
       "/private/user/block/${codUsuario}/$indStatus",
     );
@@ -59,7 +61,7 @@ class AdminRespository {
 
   Future<List<ValoresTaxas>> buscaConfigTaxas() async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     // ignore: deprecated_member_use
 
     final response = await _dio.get("/private/sys/vlrTaxa/findAll");
@@ -71,22 +73,47 @@ class AdminRespository {
 
   Future<void> saveTaxa(ValoresTaxas config) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
-    await _dio.post(
-      "/private/sys/save",
-      data: json.encode(config.toJson()),
-    );
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
+
+    final numSeq = config.numSeq;
+
+    if (numSeq != null && numSeq > 0) {
+      // O backend não tem endpoint de update — delete o antigo e cria novo
+      await excluirTaxa(numSeq);
+    }
+
+    final novoBody = json.encode({
+      "kmIni": config.kmIni,
+      "kmFim": config.kmFim,
+      "vlrTaxa": config.vlrTaxa,
+    });
+    await _dio.post("/private/sys/save", data: novoBody);
   }
 
   Future<void> excluirTaxa(int numSeq) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
-    await _dio.delete("/private/sys/taxa/$numSeq");
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
+
+    final candidates = [
+      () => _dio.delete("/private/sys/taxa/$numSeq"),
+    ];
+
+    for (final call in candidates) {
+      try {
+        await call();
+        return;
+      } on DioException catch (e) {
+        if (e.response?.statusCode == 404 || e.response?.statusCode == 405) {
+          continue;
+        }
+        rethrow;
+      }
+    }
   }
 
   Future<void> editarUsuario(int codUsuario, String desNome) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     await _dio.post(
       "/private/user/$codUsuario/edit",
       data: json.encode({"desNome": desNome}),
@@ -98,7 +125,7 @@ class AdminRespository {
   /// Retorna true se conseguiu excluir, false caso contrário
   Future<bool> excluirEmpresa(int? codUsuario, int? codEmpresa) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     
     // Lista completa de endpoints possíveis para exclusão (DELETE)
     final deleteEndpoints = <String>[];
@@ -227,7 +254,7 @@ class AdminRespository {
   /// Retorna true se conseguiu excluir, false caso contrário
   Future<bool> excluirMotorista(int? codUsuario, int? codMotorista) async {
     _dio.options.headers["Authorization"] =
-        "Bearer ${ApiBaseHelper.userSessao!.jwt}";
+        "Bearer ${ApiBaseHelper.userSessao?.jwt ?? ''}";
     
     // Lista completa de endpoints possíveis para exclusão (DELETE)
     final deleteEndpoints = <String>[];

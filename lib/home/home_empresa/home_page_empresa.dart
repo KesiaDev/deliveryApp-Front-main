@@ -7,6 +7,8 @@ import 'package:delivery_front/core/core.dart';
 import 'package:delivery_front/core/routes/app_routes.dart';
 import 'package:delivery_front/empresa/corridas/sol_nova_corrida_page.dart';
 import 'package:delivery_front/modules/monitoring/screens/delivery_request_screen.dart';
+import 'package:delivery_front/modules/payments/screens/carteira_fool_screen.dart';
+import 'package:delivery_front/modules/payments/services/empresa_payment_service.dart';
 import 'package:delivery_front/home/widgets/task_column.dart';
 import 'package:delivery_front/shared/models/DadosCorrida.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
@@ -27,7 +29,7 @@ class HomePageEmpresa extends StatefulWidget {
         Icons.add,
         color: Colors.red[800],
       ),
-      onPressed: null,
+      onPressed: () {},
     );
   }
 
@@ -225,9 +227,9 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                     },
                   ),
                 ),
-                // Botão Solicitar Entrega (novo fluxo ao vivo)
+                // Botão Nova Corrida (AppBar)
                 Padding(
-                  padding: EdgeInsets.only(right: 8),
+                  padding: EdgeInsets.only(right: 10),
                   child: ElevatedButton.icon(
                     onPressed: () {
                       if (!mounted) return;
@@ -246,12 +248,12 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                         ),
                       );
                     },
-                    icon: Icon(Icons.motorcycle_rounded, size: 18),
+                    icon: Icon(Icons.add_rounded, size: 22),
                     label: Text(
-                      'Solicitar',
+                      'Nova corrida',
                       style: GoogleFonts.poppins(
-                        fontSize: 13,
-                        fontWeight: FontWeight.w600,
+                        fontSize: 15,
+                        fontWeight: FontWeight.w700,
                       ),
                       maxLines: 1,
                       overflow: TextOverflow.ellipsis,
@@ -259,10 +261,10 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                     style: ElevatedButton.styleFrom(
                       backgroundColor: Color(0xFFE53935),
                       foregroundColor: Colors.white,
-                      elevation: 0,
-                      padding: EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                      elevation: 2,
+                      padding: EdgeInsets.symmetric(horizontal: 18, vertical: 12),
                       shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(10)),
+                          borderRadius: BorderRadius.circular(12)),
                     ),
                   ),
                 ),
@@ -629,6 +631,57 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                           }
                         });
                       }),
+                  // Carteira Fool — apenas empresa
+                  if (user.indTipo == ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA)
+                    ListTile(
+                        contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF43A047).withOpacity(0.12),
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                          child: const Icon(Icons.account_balance_wallet_rounded,
+                              color: Color(0xFF43A047), size: 20),
+                        ),
+                        title: Text(
+                          "Carteira Fool",
+                          style: GoogleFonts.poppins(
+                            fontSize: 16,
+                            fontWeight: FontWeight.w600,
+                            color: textPrimary,
+                          ),
+                        ),
+                        subtitle: Text(
+                          "Saldo e recargas",
+                          style: GoogleFonts.poppins(
+                            fontSize: 14,
+                            color: textSecondary,
+                          ),
+                        ),
+                        trailing: Icon(Icons.chevron_right_rounded, color: iconColor),
+                        onTap: () {
+                          if (!mounted) return;
+                          Navigator.pop(context);
+                          WidgetsBinding.instance.addPostFrameCallback((_) {
+                            if (mounted) {
+                              final emp = user.usuarioResp?.empresas?.isNotEmpty == true
+                                  ? user.usuarioResp!.empresas!.first
+                                  : null;
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => CarteiraFoolScreen(
+                                    codEmpresa: emp?.codEmpresa ?? 0,
+                                    empresaName: user.desNome ?? 'Empresa',
+                                  ),
+                                ),
+                              );
+                            }
+                          });
+                        }),
+                  Divider(height: 1, color: backgroundColor),
                   ListTile(
                       contentPadding: EdgeInsets.symmetric(horizontal: 20, vertical: 8),
                       leading: Container(
@@ -649,7 +702,6 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                         ),
                       ),
                       onTap: () {
-                        Navigator.pop(context); // fecha drawer
                         AppSession.logoutComConfirmacao(context);
                       }),
                   SizedBox(height: 24.0),
@@ -799,39 +851,39 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
               ],
             ),
             child: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 20, horizontal: 24),
+              padding: const EdgeInsets.symmetric(vertical: 30, horizontal: 24),
               child: Row(
                 children: [
                   Container(
-                    width: 52,
-                    height: 52,
+                    width: 72,
+                    height: 72,
                     decoration: BoxDecoration(
                       color: Colors.white.withOpacity(0.2),
-                      borderRadius: BorderRadius.circular(14),
+                      borderRadius: BorderRadius.circular(18),
                     ),
                     child: const Icon(
                       Icons.motorcycle_rounded,
                       color: Colors.white,
-                      size: 30,
+                      size: 42,
                     ),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 20),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         Text(
-                          'Nova Entrega',
+                          'Nova Corrida',
                           style: GoogleFonts.poppins(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w700,
+                            fontSize: 24,
+                            fontWeight: FontWeight.w800,
                             color: Colors.white,
                           ),
                         ),
                         Text(
                           'Solicitar motoboy agora',
                           style: GoogleFonts.poppins(
-                            fontSize: 13,
+                            fontSize: 15,
                             fontWeight: FontWeight.w400,
                             color: Colors.white.withOpacity(0.85),
                           ),
@@ -842,7 +894,7 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                   const Icon(
                     Icons.arrow_forward_ios_rounded,
                     color: Colors.white,
-                    size: 18,
+                    size: 22,
                   ),
                 ],
               ),
@@ -1005,6 +1057,7 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
             DadosCorridas corridasEmAndamento = DadosCorridas();
             DadosCorridas corridasNovas = DadosCorridas();
             DadosCorridas corridasFinalizadas = DadosCorridas();
+            DadosCorridas corridasAgendadas = DadosCorridas();
 
             for (var element in list) {
               if (ApiBaseHelper.IND_STATUS_CORRIDA_0_NOVA_CORRIDA ==
@@ -1020,6 +1073,11 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
               if (ApiBaseHelper.IND_STATUS_CORRIDA_3_CONCLUIDA ==
                   element.indStatusCorrida) {
                 corridasFinalizadas = element;
+              }
+
+              if (ApiBaseHelper.IND_STATUS_CORRIDA_7_AGENDADA ==
+                  element.indStatusCorrida) {
+                corridasAgendadas = element;
               }
             }
 
@@ -1042,6 +1100,83 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
                   subtitle: '${corridasEmAndamento.qtdCorridas ?? 0}',
                 ),
                 SizedBox(height: 12.0),
+                TaskColumn(
+                  icon: Icons.schedule_rounded,
+                  title: 'Corridas agendadas',
+                  subtitle: '${corridasAgendadas.qtdCorridas ?? 0}',
+                ),
+                SizedBox(height: 12.0),
+                Container(
+                  width: double.infinity,
+                  child: Material(
+                    color: Colors.transparent,
+                    child: InkWell(
+                      borderRadius: BorderRadius.circular(14),
+                      onTap: () {
+                        if (!mounted) return;
+                        if (user.usuarioResp?.indBloqueado == 1) {
+                          context.showInfoBar(
+                            duration: const Duration(seconds: 8),
+                            content: const Text("Novas solicitações estão bloqueadas."),
+                          );
+                          return;
+                        }
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => DeliveryRequestScreen(user: user),
+                          ),
+                        );
+                      },
+                      child: Ink(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFF3949AB),
+                          borderRadius: BorderRadius.circular(14),
+                          boxShadow: [
+                            BoxShadow(
+                              color: const Color(0xFF3949AB).withOpacity(0.25),
+                              blurRadius: 8,
+                              offset: const Offset(0, 3),
+                            ),
+                          ],
+                        ),
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.schedule_rounded, color: Colors.white, size: 26),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Agendar Corrida',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 15,
+                                        fontWeight: FontWeight.w700,
+                                        color: Colors.white,
+                                      ),
+                                    ),
+                                    Text(
+                                      'Solicitar para um horário específico',
+                                      style: GoogleFonts.poppins(
+                                        fontSize: 12,
+                                        color: Colors.white.withOpacity(0.85),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(Icons.arrow_forward_ios_rounded, color: Colors.white, size: 16),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 12.0),
                 TaskColumn(
                   icon: Icons.check_circle_rounded,
                   title: 'Corridas concluídas',
@@ -1296,6 +1431,105 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
     );
   }
 
+  Widget _buildWalletCard() {
+    final emp = user.usuarioResp?.empresas?.isNotEmpty == true
+        ? user.usuarioResp!.empresas!.first
+        : null;
+    final codEmpresa = emp?.codEmpresa;
+    if (codEmpresa == null) return const SizedBox.shrink();
+
+    return GestureDetector(
+      onTap: () {
+        if (!mounted) return;
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => CarteiraFoolScreen(
+              codEmpresa: codEmpresa,
+              empresaName: user.desNome ?? 'Empresa',
+            ),
+          ),
+        );
+      },
+      child: Container(
+        margin: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+        decoration: BoxDecoration(
+          gradient: const LinearGradient(
+            colors: [Color(0xFF388E3C), Color(0xFF66BB6A)],
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+          ),
+          borderRadius: BorderRadius.circular(16),
+          boxShadow: [
+            BoxShadow(
+              color: const Color(0xFF43A047).withOpacity(0.3),
+              blurRadius: 10,
+              offset: const Offset(0, 4),
+            ),
+          ],
+        ),
+        child: Row(
+          children: [
+            const Icon(Icons.account_balance_wallet_rounded,
+                color: Colors.white, size: 28),
+            const SizedBox(width: 14),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Carteira Fool',
+                    style: GoogleFonts.poppins(
+                      fontSize: 13,
+                      color: Colors.white.withOpacity(0.85),
+                    ),
+                  ),
+                  StreamBuilder<double>(
+                    stream: EmpresaPaymentService.streamWalletBalance(codEmpresa),
+                    builder: (_, snap) {
+                      final bal = snap.data ?? 0.0;
+                      return Text(
+                        'R\$ ${bal.toStringAsFixed(2).replaceAll('.', ',')}',
+                        style: GoogleFonts.poppins(
+                          fontSize: 20,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
+                      );
+                    },
+                  ),
+                ],
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: Colors.white.withOpacity(0.2),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                  const SizedBox(width: 4),
+                  Text(
+                    'Recarregar',
+                    style: GoogleFonts.poppins(
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                      color: Colors.white,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget montaTelaInicialEmpresa(double width) {
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -1319,6 +1553,9 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
 
                       // Botão principal - Nova Corrida
                       _buildNewOrderButton(),
+
+                      // Card da Carteira Fool
+                      _buildWalletCard(),
 
                       // Seção de Ações Rápidas
                       _buildQuickActions(),
@@ -1407,12 +1644,6 @@ class _HomePageEmpresaState extends State<HomePageEmpresa> {
   }
 
   Future<void> _onBackPressed() async {
-    if (Navigator.canPop(context)) {
-      // Há tela abaixo (sub-navegação) — volta normalmente
-      Navigator.of(context).pop();
-      return;
-    }
-    // Está na home raiz — pergunta se quer fechar o app
     await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
