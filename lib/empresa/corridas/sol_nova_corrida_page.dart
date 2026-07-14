@@ -827,8 +827,8 @@ class _AddressTile extends State<AddressTile> with TickerProviderStateMixin {
         config?.vlrKmRodado ??
         1.0;
     double vlrTaxaApp = config?.vlrTaxaApp ?? 0.0;
-    // vlrTaxaKm é taxa FLAT "por corrida" (não por km) — usar diretamente
-    final vlr = vlrTaxaKm;
+    // Até 1,50km: valor flat mínimo (R$12). Acima: taxa por km × distância.
+    final vlr = kmAux <= 1.5 ? vlrTaxaKm : vlrTaxaKm * kmAux;
     vlrTaxaApp = vlr * (vlrTaxaApp / 100);
 
     if (!mounted) return;
