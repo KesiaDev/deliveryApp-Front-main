@@ -1,9 +1,9 @@
 import 'package:delivery_front/bussiness/service/ApiBaseHelper.dart';
 import 'package:delivery_front/bussiness/service/user_service.dart';
 import 'package:delivery_front/empresa/corridas/sol_nova_corrida_page.dart';
-import 'package:delivery_front/home/home_empresa/home_page_empresa.dart';
-import 'package:delivery_front/home/widgets/active_project_card.dart';
 import 'package:delivery_front/home/widgets/task_column.dart';
+import 'package:delivery_front/modules/payments/screens/carteira_fool_screen.dart';
+import 'package:delivery_front/modules/payments/services/empresa_payment_service.dart';
 import 'package:delivery_front/shared/models/DadosCorrida.dart';
 import 'package:delivery_front/shared/models/usuario.dart';
 import 'package:flash/flash_helper.dart';
@@ -26,7 +26,9 @@ class InfoCorridaPage extends StatefulWidget {
 class _InfoCorridaPageState extends State<InfoCorridaPage>
     with WidgetsBindingObserver {
   @override
-  void initState() {}
+  void initState() {
+    super.initState();
+  }
 
   late Usuario user;
   UserService _userService = new UserService();
@@ -477,11 +479,42 @@ class _InfoCorridaPageState extends State<InfoCorridaPage>
     );
   }
 
+  void _irNovaCorrida() {
+    if (widget.userInfo.usuarioResp?.indBloqueado == 1) {
+      context.showInfoBar(
+        duration: const Duration(seconds: 8),
+        content: const Text("Novas solicitações estão bloqueadas."),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SolNovaCorridaPage()),
+    ).then((_) { if (mounted) setState(() {}); });
+  }
+
+  void _irAgendarCorrida() {
+    if (widget.userInfo.usuarioResp?.indBloqueado == 1) {
+      context.showInfoBar(
+        duration: const Duration(seconds: 8),
+        content: const Text("Novas solicitações estão bloqueadas."),
+      );
+      return;
+    }
+    Navigator.push(
+      context,
+      MaterialPageRoute(builder: (_) => SolNovaCorridaPage()),
+    ).then((_) { if (mounted) setState(() {}); });
+  }
+
   SafeArea montaTelaInicialEmpresa(double width) {
-    // Cores do padrão FOLL
-    const Color backgroundColor = Color(0xFFFFFFFF);
     const Color backgroundLight = Color(0xFFF8F6FB);
-    
+
+    final emp = widget.userInfo.usuarioResp?.empresas?.isNotEmpty == true
+        ? widget.userInfo.usuarioResp!.empresas!.first
+        : null;
+    final codEmpresa = emp?.codEmpresa;
+
     return SafeArea(
       child: Container(
         color: backgroundLight,
@@ -490,89 +523,246 @@ class _InfoCorridaPageState extends State<InfoCorridaPage>
             Expanded(
               child: SingleChildScrollView(
                 child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
                   children: <Widget>[
+
+                    // ── Botão NOVA CORRIDA (grande) ───────────────────
+                    if (!isAdm)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 20, 20, 0),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(20),
+                            onTap: _irNovaCorrida,
+                            child: Ink(
+                              decoration: BoxDecoration(
+                                gradient: const LinearGradient(
+                                  colors: [Color(0xFFE53935), Color(0xFFB71C1C)],
+                                  begin: Alignment.topLeft,
+                                  end: Alignment.bottomRight,
+                                ),
+                                borderRadius: BorderRadius.circular(20),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFFE53935).withOpacity(0.40),
+                                    blurRadius: 16,
+                                    offset: const Offset(0, 7),
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 24),
+                                child: Row(
+                                  children: [
+                                    Container(
+                                      width: 72,
+                                      height: 72,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.20),
+                                        borderRadius: BorderRadius.circular(18),
+                                      ),
+                                      child: const Icon(Icons.motorcycle_rounded,
+                                          color: Colors.white, size: 44),
+                                    ),
+                                    const SizedBox(width: 20),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Nova Corrida',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 26,
+                                                fontWeight: FontWeight.w800,
+                                                color: Colors.white,
+                                              )),
+                                          Text('Solicitar motoboy agora',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 15,
+                                                color: Colors.white.withOpacity(0.85),
+                                              )),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded,
+                                        color: Colors.white, size: 22),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // ── Botão AGENDAR CORRIDA ─────────────────────────
+                    if (!isAdm)
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                        child: Material(
+                          color: Colors.transparent,
+                          child: InkWell(
+                            borderRadius: BorderRadius.circular(16),
+                            onTap: _irAgendarCorrida,
+                            child: Ink(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF3949AB),
+                                borderRadius: BorderRadius.circular(16),
+                                boxShadow: [
+                                  BoxShadow(
+                                    color: const Color(0xFF3949AB).withOpacity(0.28),
+                                    blurRadius: 10,
+                                    offset: const Offset(0, 4),
+                                  ),
+                                ],
+                              ),
+                              child: Padding(
+                                padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 20),
+                                child: Row(
+                                  children: [
+                                    const Icon(Icons.schedule_rounded,
+                                        color: Colors.white, size: 30),
+                                    const SizedBox(width: 16),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        children: [
+                                          Text('Agendar Corrida',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 18,
+                                                fontWeight: FontWeight.w700,
+                                                color: Colors.white,
+                                              )),
+                                          Text('Solicitar para um horário específico',
+                                              style: GoogleFonts.poppins(
+                                                fontSize: 13,
+                                                color: Colors.white.withOpacity(0.85),
+                                              )),
+                                        ],
+                                      ),
+                                    ),
+                                    const Icon(Icons.arrow_forward_ios_rounded,
+                                        color: Colors.white, size: 18),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+
+                    // ── Card CARTEIRA FOOL ────────────────────────────
+                    if (!isAdm && codEmpresa != null)
+                      GestureDetector(
+                        onTap: () => Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => CarteiraFoolScreen(
+                              codEmpresa: codEmpresa,
+                              empresaName: widget.userInfo.desNome ?? 'Empresa',
+                            ),
+                          ),
+                        ),
+                        child: Container(
+                          margin: const EdgeInsets.fromLTRB(20, 12, 20, 0),
+                          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF388E3C), Color(0xFF66BB6A)],
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            borderRadius: BorderRadius.circular(16),
+                            boxShadow: [
+                              BoxShadow(
+                                color: const Color(0xFF43A047).withOpacity(0.30),
+                                blurRadius: 10,
+                                offset: const Offset(0, 4),
+                              ),
+                            ],
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.account_balance_wallet_rounded,
+                                  color: Colors.white, size: 28),
+                              const SizedBox(width: 14),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text('Carteira Fool',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 13,
+                                          color: Colors.white.withOpacity(0.85),
+                                        )),
+                                    StreamBuilder<double>(
+                                      stream: EmpresaPaymentService.streamWalletBalance(codEmpresa),
+                                      builder: (_, snap) {
+                                        final bal = snap.data ?? 0.0;
+                                        return Text(
+                                          'R\$ ${bal.toStringAsFixed(2).replaceAll('.', ',')}',
+                                          style: GoogleFonts.poppins(
+                                            fontSize: 22,
+                                            fontWeight: FontWeight.w800,
+                                            color: Colors.white,
+                                          ),
+                                        );
+                                      },
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.20),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    const Icon(Icons.add_rounded, color: Colors.white, size: 16),
+                                    const SizedBox(width: 4),
+                                    Text('Recarregar',
+                                        style: GoogleFonts.poppins(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w700,
+                                          color: Colors.white,
+                                        )),
+                                  ],
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                    // ── Informações gerais - Diário ───────────────────
                     Container(
                       color: backgroundLight,
-                      padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
-                          Row(
-                            crossAxisAlignment: CrossAxisAlignment.center,
-                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                            children: <Widget>[
-                              Flexible(
-                                child: subheading('Informações gerais - Diário'),
-                              ),
-                              if (!isAdm)
-                                GestureDetector(
-                                  onTap: () async {
-                                    if (widget.userInfo.usuarioResp!.indBloqueado == 1) {
-                                      context.showInfoBar(
-                                        duration: Duration(seconds: 8),
-                                        content: Text(
-                                            "Não será possível iniciar corrida, novas solicitações estão bloqueadas."),
-                                      );
-                                    } else {
-                                      final result = await Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                            builder: (context) => SolNovaCorridaPage()),
-                                      );
-                                      if (!mounted) return;
-                                      setState(() {});
-                                    }
-                                  },
-                                  child: Container(
-                                    padding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: Color(0xFFE53935),
-                                      borderRadius: BorderRadius.circular(14),
-                                      boxShadow: [
-                                        BoxShadow(
-                                          color: Color(0xFFE53935).withOpacity(0.35),
-                                          blurRadius: 12,
-                                          offset: Offset(0, 4),
-                                        ),
-                                      ],
-                                    ),
-                                    child: Row(
-                                      mainAxisSize: MainAxisSize.min,
-                                      children: [
-                                        Icon(Icons.add_rounded, size: 20, color: Colors.white),
-                                        SizedBox(width: 6),
-                                        Text(
-                                          'Nova corrida',
-                                          style: GoogleFonts.poppins(
-                                            fontSize: 14,
-                                            fontWeight: FontWeight.w700,
-                                            color: Colors.white,
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ),
-                            ],
-                          ),
-                          SizedBox(height: 8.0),
+                          subheading('Informações gerais - Diário'),
                           criaInfoDia(codEmpresa: 1, codMotorista: 1),
                         ],
                       ),
                     ),
+
+                    // ── Números do mês ────────────────────────────────
                     Container(
                       color: backgroundLight,
-                      padding: EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
+                      padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 20.0),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: <Widget>[
                           subheading('Números do mês'),
-                          SizedBox(height: 8.0),
+                          const SizedBox(height: 8.0),
                           criaInfoMes(codEmpresa: 1, codMotorista: 1),
                         ],
                       ),
                     ),
-                    SizedBox(height: 20.0),
+                    const SizedBox(height: 20.0),
                   ],
                 ),
               ),

@@ -547,20 +547,22 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
 
   Future<void> updateMarkerAndCircle(
       LocationData newLocalData, Uint8List imageData) async {
-    LatLng latlng = LatLng(newLocalData.latitude!, newLocalData.longitude!);
+    final lat = newLocalData.latitude;
+    final lon = newLocalData.longitude;
+    if (lat == null || lon == null) return;
+    LatLng latlng = LatLng(lat, lon);
 
     //Atualiza a localização atual do motorista
     if (user.indTipo == 1 || user.indTipo == 2) {
-      _userService.atualizarLocalMotorista(
-          newLocalData.latitude!, newLocalData.longitude!);
+      _userService.atualizarLocalMotorista(lat, lon);
       if (this.mounted) {
         if (ApiBaseHelper.IND_TIP_PERFIL_2_EMPRESA == user.indTipo &&
             ApiBaseHelper.lat == 0) {
-          ApiBaseHelper.lat = newLocalData.latitude!;
-          ApiBaseHelper.long = newLocalData.longitude!;
+          ApiBaseHelper.lat = lat;
+          ApiBaseHelper.long = lon;
         } else if (ApiBaseHelper.IND_TIP_PERFIL_1_MOTORISTA == user.indTipo) {
-          ApiBaseHelper.lat = newLocalData.latitude!;
-          ApiBaseHelper.long = newLocalData.longitude!;
+          ApiBaseHelper.lat = lat;
+          ApiBaseHelper.long = lon;
         }
         debugPrint('atualizei lat=${ApiBaseHelper.lat} e long=${ApiBaseHelper.long}');
       }
@@ -574,7 +576,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           marker = Marker(
               markerId: MarkerId("home"),
               position: latlng,
-              rotation: newLocalData.heading!,
+              rotation: newLocalData.heading ?? 0,
               draggable: false,
               zIndex: 2,
               flat: true,
@@ -584,11 +586,9 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
           _markers.add(marker!);
         }
 
-
-
         circle = Circle(
             circleId: CircleId("car"),
-            radius: newLocalData.accuracy!,
+            radius: newLocalData.accuracy ?? 50,
             zIndex: 1,
             strokeColor: Colors.orange,
             center: latlng,
@@ -630,12 +630,12 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
             _markers.add(Marker(
                 markerId: MarkerId(item.codMotorista.toString()),
                 position: LatLng(item.desLatitude!, item.desLongitude!),
-                rotation: newLocalData.heading!,
+                rotation: newLocalData.heading ?? 0,
                 draggable: false,
                 zIndex: 2,
                 flat: true,
                 anchor: Offset(0.5, 0.5),
-                icon: otherCars!));
+                icon: otherCars ?? BitmapDescriptor.defaultMarker));
           }
         }
         timeStampInicial = currentTimeInSeconds();
@@ -659,19 +659,23 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
       _locationSubscription =
           _locationTracker.onLocationChanged.listen((newLocalData) {
         if (this.mounted) {
+          final lat = newLocalData.latitude;
+          final lon = newLocalData.longitude;
+          if (lat == null || lon == null) return;
           if (_controller != null) {
             if (!_isMovingManually) {
               _controller!.animateCamera(CameraUpdate.newCameraPosition(
                   new CameraPosition(
                       bearing: 192.8334901395799,
-                      target: LatLng(
-                          newLocalData.latitude!, newLocalData.longitude!),
+                      target: LatLng(lat, lon),
                       tilt: 0,
                       zoom: 13.30)));
             }
           }
           updateMarkerAndCircle(newLocalData, imageData);
         }
+      }, onError: (e) {
+        debugPrint('Erro no stream de localização: $e');
       });
     } on PlatformException catch (e) {
       if (e.code == 'PERMISSION_DENIED') {
