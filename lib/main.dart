@@ -27,31 +27,52 @@ const AndroidNotificationChannel _fcmChannel = AndroidNotificationChannel(
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
   await Firebase.initializeApp();
-  debugPrint('📩 Mensagem em background: ${message.notification?.title}');
 
-  // Data-only messages: Android não exibe automaticamente — mostrar via local notification
-  if (message.notification == null) {
-    final plugin = FlutterLocalNotificationsPlugin();
-    const initSettings = InitializationSettings(
-      android: AndroidInitializationSettings('@mipmap/ic_launcher'),
-    );
-    await plugin.initialize(initSettings);
-    await plugin.show(
-      message.hashCode,
-      message.data['title'] as String? ?? 'Nova notificação',
-      message.data['body'] as String? ?? '',
-      NotificationDetails(
-        android: AndroidNotificationDetails(
-          _fcmChannel.id,
-          _fcmChannel.name,
-          channelDescription: _fcmChannel.description,
-          importance: Importance.max,
-          priority: Priority.high,
-          icon: '@mipmap/ic_launcher',
-        ),
+  final plugin = FlutterLocalNotificationsPlugin();
+  const initSettings = InitializationSettings(
+    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+  );
+  await plugin.initialize(initSettings);
+
+  // Garante que o canal existe antes de exibir — necessário no isolate de background
+  await plugin
+      .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+      ?.createNotificationChannel(const AndroidNotificationChannel(
+        'fool_high_importance',
+        'Notificações Fool Entregas',
+        description: 'Corridas e alertas do Fool Entregas',
+        importance: Importance.max,
+        playSound: true,
+        enableVibration: true,
+      ));
+
+  // Quando o app está fechado, mensagens data-only não aparecem automaticamente.
+  // Mensagens com notification payload + data chegam aqui também (background).
+  // Sempre exibimos via local notification para garantir som e vibração.
+  final title = message.notification?.title
+      ?? message.data['title'] as String?
+      ?? 'Fool Entregas';
+  final body = message.notification?.body
+      ?? message.data['body'] as String?
+      ?? '';
+
+  await plugin.show(
+    message.hashCode,
+    title,
+    body,
+    NotificationDetails(
+      android: AndroidNotificationDetails(
+        _fcmChannel.id,
+        _fcmChannel.name,
+        channelDescription: _fcmChannel.description,
+        importance: Importance.max,
+        priority: Priority.high,
+        icon: '@mipmap/ic_launcher',
+        playSound: true,
+        enableVibration: true,
       ),
-    );
-  }
+    ),
+  );
 }
 
 Future<void> main() async {

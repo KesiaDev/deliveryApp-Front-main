@@ -18,6 +18,11 @@
     <!-- Notification permission (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
 
+    <!-- Needed for FCM background wake-up -->
+    <uses-permission android:name="android.permission.WAKE_LOCK"/>
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED"/>
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE"/>
+
    <application
         android:label="Fool Delivery"
         android:icon="@mipmap/ic_launcher"
@@ -69,10 +74,10 @@
             android:name="com.google.firebase.messaging.default_notification_color"
             android:resource="@color/red" />
 
-        <!-- Canal de alta prioridade para corridas — garante som+vibração mesmo com app fechado -->
+        <!-- Canal de alta prioridade para corridas — deve bater com o canal criado em main.dart -->
         <meta-data
             android:name="com.google.firebase.messaging.default_notification_channel_id"
-            android:value="fool_corridas_channel" />
+            android:value="fool_high_importance" />
 
     </application>
    
