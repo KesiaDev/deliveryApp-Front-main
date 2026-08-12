@@ -81,12 +81,16 @@ class ListaSolicitacoesMotoristaController extends ChangeNotifier {
   Future<bool> aceitarCorrida(int numSeqChamado, int indStatusCorrida) async {
     try {
       // Block acceptance if driver already has an active delivery
-      final activasResult = await _userService.fetchSolicitacoesMotorista(
-        indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO,
-      );
-      final aceitasResult = await _userService.fetchSolicitacoesMotorista(
-        indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA,
-      );
+      List? activasResult;
+      List? aceitasResult;
+      try {
+        activasResult = await _userService.fetchSolicitacoesMotorista(
+          indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_2_EM_ANDAMENTO,
+        );
+        aceitasResult = await _userService.fetchSolicitacoesMotorista(
+          indBuscaChamadosRaio: ApiBaseHelper.IND_STATUS_CORRIDA_1_SOLICITACAO_ACEITA,
+        );
+      } catch (_) {}
       final totalAtivas = (activasResult?.length ?? 0) + (aceitasResult?.length ?? 0);
       if (totalAtivas > 0) {
         _showMyDialog("Você já possui uma corrida ativa. Conclua-a antes de aceitar outra.");
@@ -94,12 +98,16 @@ class ListaSolicitacoesMotoristaController extends ChangeNotifier {
       }
 
       await _userService.aceitarCorrida(numSeqChamado, indStatusCorrida);
-      
-      // Envia mensagem automática no chat
-      await ChatAutomaticMessages.sendStatusMessage(
-        corridaId: numSeqChamado.toString(),
-        indStatusCorrida: indStatusCorrida,
-      );
+
+      // Mensagem automática e rastreamento não bloqueiam o fluxo em caso de erro
+      try {
+        await ChatAutomaticMessages.sendStatusMessage(
+          corridaId: numSeqChamado.toString(),
+          indStatusCorrida: indStatusCorrida,
+        );
+      } catch (e) {
+        debugPrint('⚠️ Erro ao enviar mensagem automática: $e');
+      }
 
       // Inicia rastreamento automaticamente quando motorista aceita corrida
       final user = ApiBaseHelper.userSessao;
@@ -107,28 +115,27 @@ class ListaSolicitacoesMotoristaController extends ChangeNotifier {
         try {
           await TrackingService.startTracking(
             corridaId: numSeqChamado.toString(),
-            userId: user.codUsuario.toString(),
+            userId: user.codUsuario?.toString() ?? '0',
           );
           debugPrint('✅ Rastreamento iniciado automaticamente para corrida $numSeqChamado');
         } catch (e) {
           debugPrint('⚠️ Erro ao iniciar rastreamento: $e');
-          // Não bloqueia o fluxo se o rastreamento falhar
         }
       }
-      
+
       notifyListeners();
       return true;
     } on PlatformException catch (e) {
       if (e.message != null && e.message!.contains("outro motorista")) {
-        _showMyDialog(
-            "Corrida já aceita por outro motorista, aguarde uma próxima");
+        _showMyDialog("Corrida já aceita por outro motorista, aguarde uma próxima");
       } else {
-        LoginControler.showToast(
-            context, "Erro ao atualizar chamado tente novamente!");
+        LoginControler.showToast(context, "Erro ao atualizar chamado tente novamente!");
       }
       return false;
-    } finally {
-      //DialogBuilder(context).hideOpenDialog();
+    } catch (e) {
+      debugPrint('❌ Erro ao aceitar corrida: $e');
+      LoginControler.showToast(context, "Erro ao aceitar corrida, tente novamente.");
+      return false;
     }
   }
 

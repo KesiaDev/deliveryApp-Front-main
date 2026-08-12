@@ -743,6 +743,7 @@ class _HomePageState extends State<HomePage> with WidgetsBindingObserver {
               actions: <Widget>[
                 TextButton(
                     onPressed: () async {
+                      if (sol.numSeq == null) return;
                       ListaSolicitacoesEmpresaController controllerSol =
                           ListaSolicitacoesEmpresaController(context);
                       final accepted = await controllerSol.aceitarCorrida(sol.numSeq!, 1);

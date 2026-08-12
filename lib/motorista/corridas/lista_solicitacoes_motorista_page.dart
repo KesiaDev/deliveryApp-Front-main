@@ -757,9 +757,9 @@ class _ListaCemMotoristaViewState extends State<ListaCemMotoristaView> {
           bool sucess =
               await _controller.aceitarCorrida(numSeqChamado, nextStatus);
           if (sucess) {
-            Navigator.of(_context).pop();
+            if (_context.mounted) Navigator.of(_context).pop();
             // Abre GPS direto para retirada (estilo Uber/iFood)
-            await _openPickupNavigation(_context, solicitacao);
+            if (_context.mounted) await _openPickupNavigation(_context, solicitacao);
             // BUG-015: após GPS abrir, navega para corridas aceitas
             // para o motorista não ficar preso na tela de "0 corridas disponíveis"
             if (_context.mounted) {
